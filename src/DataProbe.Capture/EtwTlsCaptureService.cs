@@ -1,7 +1,5 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Text.Json;
+using System.Xml;
 using DataProbe.Core;
 using DataProbe.Core.TlsFingerprint;
 
@@ -28,6 +26,7 @@ public class EtwTlsCaptureService : IPassiveKeyProvider
     private long _sessionHandle;
     private CancellationTokenSource? _cts;
     private bool _isRunning;
+    private string? _etlPath;
 
     // ── ETW 常量 ──
 
@@ -143,22 +142,19 @@ public class EtwTlsCaptureService : IPassiveKeyProvider
         return Task.CompletedTask;
     }
 
+    private string? __etlPath;
+
     /// <summary>
     /// 使用 logman.exe 启动 ETW 跟踪（最轻量，零依赖）
     /// </summary>
     private void StartTraceWithLogman()
     {
-        // logman create trace DataProbeTlsTrace
-        //   -o C:\Temp\dp_tls.etl
-        //   -p "Microsoft-Windows-Schannel" 0x8000000000000000 0x4
-        //   -ets
-
-        var etlPath = Path.Combine(Path.GetTempPath(), $"dp_tls_{Guid.NewGuid():N}.etl");
+        __etlPath = Path.Combine(Path.GetTempPath(), $"dp_tls_{Guid.NewGuid():N}.etl");
 
         var psi = new ProcessStartInfo
         {
             FileName = "logman.exe",
-            Arguments = $"create trace DataProbeTlsTrace -o \"{etlPath}\" -p \"Microsoft-Windows-Schannel\" 0x8000000000000000 4 -ets",
+            Arguments = $"create trace DataProbeTlsTrace -o \"{_etlPath}\" -p \"Microsoft-Windows-Schannel\" 0x8000000000000000 4 -ets",
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
@@ -184,7 +180,7 @@ public class EtwTlsCaptureService : IPassiveKeyProvider
             throw new InvalidOperationException($"logman failed ({proc.ExitCode}): {error}");
         }
 
-        Console.Error.WriteLine($"[EtwTlsCapture] Trace started, output: {etlPath}");
+        Console.Error.WriteLine($"[EtwTlsCapture] Trace started, output: {_etlPath}");
     }
 
     private void StopTraceWithLogman()
@@ -205,27 +201,29 @@ public class EtwTlsCaptureService : IPassiveKeyProvider
     }
 
     /// <summary>
-    /// 后台解析 ETL 文件中的 Schannel 事件（简化版）
-    /// 完整解析需要 TraceEvent 库，此处为 PoC 实现
+    /// 后台解析 ETL 文件 — 使用 tracerpt 将 ETL 转换为 XML 后解析
     /// </summary>
     private async Task ProcessTraceLoop(CancellationToken ct)
     {
-        // PoC 阶段: 使用 PowerShell 的 Get-WinEvent 作为轻量级解析方式
-        // Phase 2: 替换为 TraceEvent 库的完整 ETW 事件解析
+        if (string.IsNullOrEmpty(__etlPath)) return;
+
+        var lastXmlSize = 0L;
 
         try
         {
             while (!ct.IsCancellationRequested)
             {
-                await Task.Delay(1000, ct);
+                await Task.Delay(3000, ct);
 
                 try
                 {
-                    // 使用 PowerShell 命令查询最近的 Schannel 事件
+                    var xmlPath = Path.ChangeExtension(__etlPath, ".xml");
+
+                    // 用 tracerpt 转换 ETL → XML
                     var psi = new ProcessStartInfo
                     {
-                        FileName = "powershell.exe",
-                        Arguments = "-Command \"Get-WinEvent -ProviderName 'Microsoft-Windows-Schannel' -MaxEvents 10 2>$null | Select-Object TimeCreated,Id,Message | ConvertTo-Json\"",
+                        FileName = "tracerpt.exe",
+                        Arguments = $"\"{__etlPath}\" -o \"{xmlPath}\" -of XML -y",
                         UseShellExecute = false,
                         CreateNoWindow = true,
                         RedirectStandardOutput = true,
@@ -235,15 +233,24 @@ public class EtwTlsCaptureService : IPassiveKeyProvider
                     using var proc = Process.Start(psi);
                     if (proc == null) continue;
 
-                    var output = await proc.StandardOutput.ReadToEndAsync(ct);
-                    proc.WaitForExit(2000);
+                    var error = proc.StandardError.ReadToEnd();
+                    proc.WaitForExit(5000);
 
-                    // 解析 JSON 输出，提取密钥事件
-                    ParsePowerShellEvents(output);
+                    // 检查 XML 文件是否更新
+                    if (File.Exists(xmlPath))
+                    {
+                        var currentSize = new FileInfo(xmlPath).Length;
+                        if (currentSize > lastXmlSize)
+                        {
+                            lastXmlSize = currentSize;
+                            var xml = File.ReadAllText(xmlPath);
+                            ParseTraceEvents(xml);
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[EtwTlsCapture] Poll error: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[EtwTlsCapture] Poll error: {ex.Message}");
                 }
             }
         }
@@ -251,119 +258,107 @@ public class EtwTlsCaptureService : IPassiveKeyProvider
     }
 
     /// <summary>
-    /// 解析 PowerShell 输出的 Schannel 事件 JSON
+    /// 解析 tracerpt 输出的 XML，提取 Schannel 事件中的密钥
     /// </summary>
-    private void ParsePowerShellEvents(string json)
+    private void ParseTraceEvents(string xml)
     {
-        if (string.IsNullOrEmpty(json) || json.Trim() == "[]") return;
+        if (string.IsNullOrEmpty(xml)) return;
 
         try
         {
-            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var doc = new System.Xml.XmlDocument();
+            doc.LoadXml(xml);
 
-            JsonElement events;
-            if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
-                events = doc.RootElement;
-            else
-                return;
+            // 查找所有 Event 节点
+            var events = doc.SelectNodes("//Event");
+            if (events == null || events.Count == 0) return;
 
-            foreach (var evt in events.EnumerateArray())
+            foreach (System.Xml.XmlNode? evt in events)
             {
-                var id = evt.TryGetProperty("Id", out var idProp) ? idProp.GetUInt16() : (ushort)0;
-                var message = evt.TryGetProperty("Message", out var msgProp) ? msgProp.GetString() ?? "" : "";
+                if (evt == null) continue;
 
-                // 分析事件消息，提取密钥信息
-                if (id == EventIdHandshakeStop || id == EventIdKeyMaterial || message.Contains("master key", StringComparison.OrdinalIgnoreCase))
+                // 获取 EventID
+                var idNode = evt.SelectSingleNode("System/EventID");
+                if (idNode == null) continue;
+                var eventId = idNode.InnerText.Trim();
+
+                // 只处理 Schannel 的握手完成和密钥事件
+                if (eventId != "1001" && eventId != "1002" && eventId != "1003") continue;
+
+                // 获取 EventData 中的所有数据项
+                var dataNodes = evt.SelectNodes("EventData/Data");
+                if (dataNodes == null || dataNodes.Count == 0) continue;
+
+                var entry = new SslKeyEntry
                 {
-                    var entry = ParseKeyFromMessage(message);
-                    if (entry != null)
+                    CapturedAt = DateTime.UtcNow,
+                    Type = eventId switch { "1001" => "TLS12", "1002" => "TLS13", _ => "Unknown" }
+                };
+
+                string? masterKey = null, clientRandom = null;
+
+                foreach (System.Xml.XmlNode? data in dataNodes)
+                {
+                    if (data == null) continue;
+                    var name = data.Attributes?["Name"]?.Value ?? "";
+                    var value = data.InnerText.Trim();
+
+                    switch (name.ToLower())
                     {
-                        OnKeyCaptured?.Invoke(entry);
-                        Console.Error.WriteLine($"[EtwTlsCapture] 🔑 Key captured: {message[..Math.Min(80, message.Length)]}");
+                        case "masterkey" or "master_key" or "keymaterial" or "key_material":
+                            masterKey = value; break;
+                        case "clientrandom" or "client_random":
+                            clientRandom = value; break;
+                        case "sessionid" or "session_id":
+                            entry.ClientRandom = value; break;
                     }
+                }
+
+                // 有效密钥 = MasterKey + ClientRandom 都存在
+                if (!string.IsNullOrEmpty(masterKey) && !string.IsNullOrEmpty(clientRandom))
+                {
+                    entry.MasterKey = masterKey;
+                    entry.ClientRandom = clientRandom;
+                    entry.RawLine = $"CLIENT_RANDOM {clientRandom} {masterKey}";
+                    entry.IsParsed = true;
+
+                    OnKeyCaptured?.Invoke(entry);
+                    Console.Error.WriteLine($"[EtwTlsCapture] 🔑 Key captured: {eventId} CLIENT_RANDOM {clientRandom[..Math.Min(16, clientRandom.Length)]}...");
                 }
             }
         }
-        catch { }
-    }
-
-    /// <summary>
-    /// 从 Schannel 事件消息中解析 TLS 密钥
-    /// 消息格式示例:
-    ///   "Master Key: ABC123...  Client Random: DEF456...  Session ID: ..."
-    ///   "A TLS handshake completed. Protocol: Tls1.2, CipherSuite: xxxx"
-    /// </summary>
-    private static SslKeyEntry? ParseKeyFromMessage(string message)
-    {
-        if (string.IsNullOrEmpty(message)) return null;
-
-        var entry = new SslKeyEntry { RawLine = message, CapturedAt = DateTime.UtcNow };
-
-        // 提取 "Master Key: xxx" 或 "master key: xxx"
-        var mkMatch = System.Text.RegularExpressions.Regex.Match(message,
-            @"[Mm]aster\s+[Kk]ey\s*:\s*([a-fA-F0-9]+)", System.Text.RegularExpressions.RegexOptions.Compiled);
-        if (mkMatch.Success) entry.MasterKey = mkMatch.Groups[1].Value;
-
-        // 提取 "Client Random: xxx"
-        var crMatch = System.Text.RegularExpressions.Regex.Match(message,
-            @"[Cc]lient\s+[Rr]andom\s*:\s*([a-fA-F0-9]+)", System.Text.RegularExpressions.RegexOptions.Compiled);
-        if (crMatch.Success) entry.ClientRandom = crMatch.Groups[1].Value;
-
-        // 提取 "Session ID: xxx"
-        var sidMatch = System.Text.RegularExpressions.Regex.Match(message,
-            @"[Ss]ession\s+[Ii][Dd]\s*:\s*([a-fA-F0-9]+)", System.Text.RegularExpressions.RegexOptions.Compiled);
-        if (sidMatch.Success) entry.Type = sidMatch.Groups[1].Value.StartsWith("0x") ? "TLS13" : "TLS12";
-
-        // 标记是否成功解析
-        entry.IsParsed = !string.IsNullOrEmpty(entry.MasterKey) && !string.IsNullOrEmpty(entry.ClientRandom);
-
-        if (entry.IsParsed)
+        catch (Exception ex)
         {
-            // 重构为 NSS KeyLog 格式
-            entry.RawLine = $"CLIENT_RANDOM {entry.ClientRandom} {entry.MasterKey}";
+            System.Diagnostics.Debug.WriteLine($"[EtwTlsCapture] Parse error: {ex.Message}");
         }
-
-        return entry.IsParsed ? entry : null;
     }
 
     /// <summary>
-    /// 回退方案：通过 EventLog 查询 Schannel 事件
+    /// 回退方案：直接启动 logman 的不同关键词组合
     /// </summary>
     private void FallbackStart()
     {
-        // 如果 logman 失败，尝试使用 EventLogReader
-        // 这只能读取 Windows 事件日志中的 Schannel 事件（非实时 ETW）
-        // 但比完全没有好
-        Console.Error.WriteLine("[EtwTlsCapture] Using EventLog fallback");
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                while (!_cts!.Token.IsCancellationRequested)
-                {
-                    using var reader = new System.Diagnostics.Eventing.Reader.EventLogReader(
-                        "Microsoft-Windows-Schannel/Operational",
-                        System.Diagnostics.Eventing.Reader.PathType.LogName);
+        Console.Error.WriteLine("[EtwTlsCapture] Fallback: trying alternative keyword mask");
 
-                    for (var evt = reader.ReadEvent(); evt != null; evt = reader.ReadEvent())
-                    {
-                        if (_cts.Token.IsCancellationRequested) break;
-                        var msg = evt.FormatDescription() ?? "";
-                        var entry = ParseKeyFromMessage(msg);
-                        if (entry != null)
-                        {
-                            OnKeyCaptured?.Invoke(entry);
-                            Console.Error.WriteLine($"[EtwTlsCapture] 🔑 EventLog key: {msg[..Math.Min(80, msg.Length)]}");
-                        }
-                    }
-                    await Task.Delay(5000, _cts.Token);
-                }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
+        // 某些 Windows 版本需要不同的关键词掩码
+        // 尝试更常用的安全审计关键词
+        try
+        {
+            StopTraceWithLogman();
+            var psi = new ProcessStartInfo
             {
-                Console.Error.WriteLine($"[EtwTlsCapture] EventLog fallback error: {ex.Message}");
-            }
-        }, _cts!.Token);
+                FileName = "logman.exe",
+                Arguments = $"create trace DpTlsFallback -o \"{Path.GetTempPath()}\\dp_fallback.etl\" -p \"Microsoft-Windows-Schannel\" 0x8000000000000000 255 -ets",
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var proc = Process.Start(psi);
+            if (proc != null) proc.WaitForExit(2000);
+            Console.Error.WriteLine("[EtwTlsCapture] Fallback trace started");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[EtwTlsCapture] Fallback failed: {ex.Message}");
+        }
     }
 }
