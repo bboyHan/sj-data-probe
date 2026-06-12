@@ -28,6 +28,7 @@ public class ReAnalyzer
         _scanners.Add(new AntiEmulatorDetector());
         _scanners.Add(new ApkManifestScanner());
         _scanners.Add(new PeImportScanner());
+        _scanners.Add(new WasmAnalyzer());
     }
 
     /// <summary>指定文件类型支持哪些扫描器</summary>

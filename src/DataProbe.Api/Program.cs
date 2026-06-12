@@ -710,6 +710,59 @@ app.MapPost("/api/decode", async (Microsoft.AspNetCore.Http.HttpRequest req) =>
     }
 }).WithName("DecodeData").WithDescription("尝试多种解码方式解码数据（Base64/URL/Hex/JSON）");
 
+// ── AI-Native 规则生成 API ──
+var _ruleGenerator = new DataProbe.Core.LLM.RuleGeneratorOrchestrator();
+
+app.MapPost("/api/rules/generate", async (Microsoft.AspNetCore.Http.HttpRequest req) =>
+{
+    try
+    {
+        var body = await req.ReadFromJsonAsync<Dictionary<string, object>>();
+        var description = body?.GetValueOrDefault("description", "")?.ToString() ?? "";
+        var sample = body?.GetValueOrDefault("sample", "")?.ToString();
+        if (string.IsNullOrEmpty(description))
+            return Results.BadRequest(new { error = "description_required" });
+        var result = await _ruleGenerator.GenerateAsync(description, sample);
+        if (!result.Success)
+            return Results.Ok(new { success = false, message = result.ErrorMessage ?? "No rules generated" });
+        foreach (var rule in result.Rules)
+            ruleEngine.SaveRule(rule);
+        return Results.Ok(new { success = true, generator = result.GeneratorName, confidence = result.Confidence, explanation = result.Explanation, rules = result.Rules.Select(r => new { r.Name, r.Description }) });
+    }
+    catch (Exception ex) { return Results.Problem(ex.Message); }
+}).WithName("GenerateRules").WithDescription("用自然语言描述或样本数据生成提取规则");
+
+app.MapPost("/api/rules/import", async (Microsoft.AspNetCore.Http.HttpRequest req) =>
+{
+    try
+    {
+        var body = await req.ReadFromJsonAsync<Dictionary<string, object>>();
+        var json = body?.GetValueOrDefault("pack_json", "")?.ToString() ?? "";
+        if (string.IsNullOrEmpty(json)) return Results.BadRequest(new { error = "pack_json_required" });
+        var importer = new DataProbe.Core.RulePackImporter();
+        var result = importer.ImportFromJson(json);
+        return Results.Ok(new { success = result.Success, pack_name = result.PackName, imported = result.Imported, skipped = result.Skipped });
+    }
+    catch (Exception ex) { return Results.Problem(ex.Message); }
+}).WithName("ImportRulePack").WithDescription("导入规则包（JSON 格式）");
+
+app.MapGet("/api/rules/packs", () =>
+{
+    var importer = new DataProbe.Core.RulePackImporter();
+    var packs = importer.ScanInstalledPacks();
+    return Results.Ok(new { total = packs.Count, packs });
+}).WithName("ListRulePacks").WithDescription("列出所有已安装的规则包");
+
+app.MapGet("/api/llm/status", () =>
+{
+    try
+    {
+        var ollama = new DataProbe.Core.LLM.OllamaRuleGenerator();
+        return Results.Ok(new { ollama = ollama.IsAvailable, template_engine = true });
+    }
+    catch { return Results.Ok(new { ollama = false, template_engine = true }); }
+}).WithName("LlmStatus").WithDescription("检查 AI 规则生成器状态");
+
 // Export CA certificate
 app.MapGet("/cert", () =>
 {

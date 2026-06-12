@@ -176,6 +176,7 @@ tr.clickable{cursor:pointer}
     <div class="tab" data-tab="channels">🔌 Channels</div>
     <div class="tab" data-tab="traffic">📡 Traffic</div>
     <div class="tab" data-tab="export">📊 Export</div>
+    <div class="tab" data-tab="ai">🤖 AI</div>
   </nav>
 
   <!-- ════════════════════ Investigate ════════════════════ -->
@@ -255,6 +256,33 @@ tr.clickable{cursor:pointer}
     </div>
   </div>
 
+  <!-- ════════════════════ AI ════════════════════ -->
+  <div class="tab-content" id="panel-ai">
+    <div style="margin-bottom:16px">
+      <div class="card--header" style="margin-bottom:12px">🤖 AI Rule Generator</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+        <span class="badge" id="ollamaStatus" style="font-size:10px">⏳ checking...</span>
+        <span class="badge" style="font-size:10px;background:var(--bg-card)">⚙️ Template Engine (fallback)</span>
+      </div>
+      <textarea class="input" id="aiPrompt" rows="3" placeholder="Describe what data you want to extract...&#10;e.g.: extract the sign field from the payment API response" style="margin-bottom:8px;resize:vertical"></textarea>
+      <textarea class="input" id="aiSample" rows="4" placeholder="Optional: paste a sample response here for better accuracy" style="margin-bottom:8px;font-family:var(--font-mono);font-size:12px;resize:vertical"></textarea>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn--primary" onclick="generateRules()">🤖 Generate Rules</button>
+        <button class="btn" onclick="document.getElementById('aiResult').innerHTML='';document.getElementById('aiPrompt').value=''">Clear</button>
+      </div>
+      <div id="aiResult" style="margin-top:12px"></div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px">
+      <div class="card--header" style="margin-bottom:12px">📦 Rule Pack Import</div>
+      <textarea class="input" id="rulePackJson" rows="6" placeholder="Paste rule pack JSON here..." style="margin-bottom:8px;font-family:var(--font-mono);font-size:12px;resize:vertical"></textarea>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="importRulePack()">📥 Import Pack</button>
+        <button class="btn" onclick="loadRulePacks()">📋 List Packs</button>
+      </div>
+      <div id="rulePackResult" style="margin-top:12px"></div>
+    </div>
+  </div>
+
   <!-- ════════════════════ Export ════════════════════ -->
   <div class="tab-content" id="panel-export">
     <div style="display:flex;gap:12px;flex-wrap:wrap">
@@ -320,10 +348,11 @@ function switchTab(name) {
   if (name==='rules') loadRules();
   if (name==='channels') loadChannels();
   if (name==='traffic') loadTraffic();
+  if (name==='ai') { loadLlmStatus(); }
 }
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
 const hashTab = location.hash.slice(1);
-if (hashTab && ['investigate','rules','channels','traffic','export'].includes(hashTab)) switchTab(hashTab);
+if (hashTab && ['investigate','rules','channels','traffic','export','ai'].includes(hashTab)) switchTab(hashTab);
 
 // ═══════════════════ Helpers ═══════════════════
 async function api(url, opts) { const r = await fetch(url, opts); if (!r.ok) throw new Error(await r.text()); return r.json(); }
@@ -566,6 +595,74 @@ function toggleLog() { logVisible = !logVisible;
     document.body.appendChild(p);
   }
   p.style.display = logVisible ? 'block' : 'none';
+}
+
+// ═══════════════════ AI Generator ═══════════════════
+async function generateRules() {
+  const prompt = document.getElementById('aiPrompt').value.trim();
+  const sample = document.getElementById('aiSample').value.trim();
+  if (!prompt) { toast('Please describe what data to extract','error'); return; }
+  const container = document.getElementById('aiResult');
+  container.innerHTML = '<div class="skeleton" style="height:40px"></div>';
+  try {
+    const res = await api('/api/rules/generate', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({description:prompt, sample:sample||undefined})});
+    if (res.success) {
+      container.innerHTML = `<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px">
+        <div style="color:var(--accent-green);margin-bottom:8px">✅ Generated ${res.rules.length} rules via ${res.generator}</div>
+        ${(res.rules||[]).map(r => `<div style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);padding:4px 0">📜 ${r.name} — ${r.description||''}</div>`).join('')}
+        <div style="margin-top:8px;font-size:11px;color:var(--text-secondary)">Rules saved. Go to 📜 Rules tab to view.</div>
+      </div>`;
+      toast(`Generated ${res.rules.length} rules`);
+      if (res.generator !== 'template_engine') {
+        document.getElementById('ollamaStatus').textContent = `✅ ${res.generator}`;
+        document.getElementById('ollamaStatus').className = 'badge';
+        document.getElementById('ollamaStatus').style.cssText='background:var(--accent-green);color:#fff;font-size:10px';
+      }
+    } else {
+      container.innerHTML = `<div style="color:var(--accent-red)">${res.message||'No rules generated'}</div>`;
+    }
+  } catch(e) { container.innerHTML = `<div style="color:var(--accent-red)">${e.message}</div>`; }
+}
+
+async function loadLlmStatus() {
+  try {
+    const res = await api('/api/llm/status');
+    const badge = document.getElementById('ollamaStatus');
+    if (res.ollama) {
+      badge.textContent = '✅ Ollama available';
+      badge.style.cssText='background:var(--accent-green);color:#fff;font-size:10px';
+    } else {
+      badge.textContent = '⚪ Ollama not available (using template only)';
+    }
+  } catch(e) {}
+}
+
+async function importRulePack() {
+  const json = document.getElementById('rulePackJson').value.trim();
+  if (!json) { toast('Paste rule pack JSON first','error'); return; }
+  const container = document.getElementById('rulePackResult');
+  try {
+    const res = await api('/api/rules/import', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({pack_json:json})});
+    container.innerHTML = `<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px">
+      <div style="color:var(--accent-green)">✅ Imported ${res.imported} rules, skipped ${res.skipped}</div>
+    </div>`;
+    toast(`Imported ${res.imported} rules`);
+    if (res.imported > 0) loadRules();
+  } catch(e) { container.innerHTML = `<div style="color:var(--accent-red)">${e.message}</div>`; }
+}
+
+async function loadRulePacks() {
+  const container = document.getElementById('rulePackResult');
+  try {
+    const res = await api('/api/rules/packs');
+    container.innerHTML = `<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px">
+      <div style="margin-bottom:8px">📦 ${res.total} rule packs</div>
+      ${(res.packs||[]).map(p => `<div style="font-size:12px;color:var(--text-secondary);padding:3px 0">📜 ${p.name} (${p.ruleCount} rules, ${p.targets?.length||0} targets)</div>`).join('')}
+    </div>`;
+  } catch(e) { container.innerHTML = `<div style="color:var(--accent-red)">${e.message}</div>`; }
 }
 
 // ═══════════════════ Copy ═══════════════════
