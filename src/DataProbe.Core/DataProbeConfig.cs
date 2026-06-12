@@ -1,9 +1,8 @@
 namespace DataProbe.Core;
 
 /// <summary>
-/// 万能数据采集引擎 — 全局配置。
-/// 所有配置项均有默认值，可通过 config.json 或环境变量覆盖。
-/// 不包含任何业务语义，TargetDomains/SpoofDomains/SniKeywords 由调用方注入。
+/// 全局配置。
+/// 所有配置项均有默认值，可通过 config.json 或 CLI 参数覆盖。
 /// </summary>
 public class DataProbeConfig
 {
@@ -34,22 +33,47 @@ public class DataProbeConfig
     public int HttpTimeoutSec { get; set; } = 5;
 
     // ── Target Domain List ────────────────────────────
-    // 引擎只会深度处理命中此列表的流量（TLS 解密、正文提取）。
-    // 空列表 = 处理所有流量（性能较低）。
     public string[] TargetDomains { get; set; } = Array.Empty<string>();
 
     // ── DNS Spoof List ────────────────────────────────
-    // DNS 劫持目标。命中此列表的 DNS 响应会被篡改为 127.0.0.1。
     public string[] SpoofDomains { get; set; } = Array.Empty<string>();
 
     // ── SNI Keywords ──────────────────────────────────
-    // WinDivert 通道使用此列表判断是否将连接交给 TlsProxy。
     public string[] SniKeywords { get; set; } = Array.Empty<string>();
 
     // ── Storage ───────────────────────────────────────
     public string AppDataPath { get; set; } = "";
     public string CaCertFileName { get; set; } = "dataprobe_ca.p12";
     public string ConfigFileName { get; set; } = "config.json";
+
+    // ── 新增：Session 配置 ────────────────────────────
+    /// <summary>Session 快照最大步骤数</summary>
+    public int MaxSessionSteps { get; set; } = 1000;
+
+    /// <summary>Session 快照最大 HTTP 事务数</summary>
+    public int MaxSessionTransactions { get; set; } = 10000;
+
+    /// <summary>是否启用启发式提取</summary>
+    public bool EnableHeuristicExtraction { get; set; } = true;
+
+    /// <summary>启发式提取最低熵值阈值</summary>
+    public double HeuristicEntropyThreshold { get; set; } = 4.5;
+
+    // ── 新增：仿真配置 ────────────────────────────────
+    /// <summary>TLS 指纹模板名称（为空则使用系统默认）</summary>
+    public string? TlsFingerprintProfile { get; set; }
+
+    /// <summary>是否启用行为仿真</summary>
+    public bool EnableBehaviorSimulation { get; set; }
+
+    // ── 新增：调查引擎配置 ────────────────────────────
+    /// <summary>最大通道异常重试次数</summary>
+    public int MaxChannelRetries { get; set; } = 2;
+
+    /// <summary>通道健康检查间隔（秒）</summary>
+    public int HealthCheckIntervalSec { get; set; } = 30;
+
+    // ── 路径辅助方法 ──────────────────────────────────
 
     public string GetCaCertPath()
     {

@@ -37,6 +37,9 @@ public class TlsProxy : IAsyncDisposable
     private long _activeConnections;
     private long _failedConnections;
 
+    /// <summary>捕获到新事务时触发（用于 SessionBuilder 桥接）</summary>
+    public event Action<DataProbe.Core.NormalizedTransaction>? OnTransactionCaptured;
+
     public TlsProxy(DataProbeConfig config, CertificateManager certMgr,
                     CredentialQueue credentialQueue,
                     DataProbe.Extractor.RuleEngine? ruleEngine = null,
@@ -339,6 +342,9 @@ public class TlsProxy : IAsyncDisposable
                                 await _credentialQueue.EnqueueAsync(cred);
                                 Console.Error.WriteLine($"[DataProbe] Captured: {cred.Platform}/{cred.Value[..Math.Min(50, cred.Value.Length)]}");
                             }
+
+                            // 通知 SessionBuilder（新架构）
+                            OnTransactionCaptured?.Invoke(tx);
                         }
                     }
 

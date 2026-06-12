@@ -1,14 +1,32 @@
 {
   "name": "example",
-  "description": "示例规则 — 匹配 example.com 的 /api/data 路径，提取 JSON 响应中的目标字段",
+  "description": "示例规则 — 演示全位置扫描配置。匹配 example.com 的 /api/data，提取 JSON 响应中的目标字段",
   "priority": 100,
   "enabled": true,
+
+  "scan_locations": [
+    "response.body",
+    "response.headers",
+    "request.url"
+  ],
+
+  "context": {
+    "requires_operation": ["example.com"],
+    "min_confidence": 0.7
+  },
+
   "matchers": [
     {"field": "domain", "operator": "contains", "value": "example.com"},
     {"field": "path", "operator": "regex", "value": "/api/data"}
   ],
+
   "extractors": [
-    {"name": "target_field", "source": "response_body",
-     "pattern": "\"target\"\\s*:\\s*\"([^\"]+)\"", "output_field": "value", "data_type": "url"}
+    {
+      "name": "target_field",
+      "source": "response_body",
+      "output_field": "value",
+      "data_type": "url",
+      "pattern": "\"target\"\\s*:\\s*\"([^\"]+)\""
+    }
   ]
 }

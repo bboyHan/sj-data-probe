@@ -7,5 +7,12 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\DataProbe.Core\DataProbe.Core.csproj" />
+    <ProjectReference Include="..\DataProbe.Capture\DataProbe.Capture.csproj" />
+    <ProjectReference Include="..\DataProbe.Extractor\DataProbe.Extractor.csproj" />
+    <ProjectReference Include="..\DataProbe.Http\DataProbe.Http.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 </Project>

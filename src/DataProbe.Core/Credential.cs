@@ -14,6 +14,8 @@ public enum CapturedDataType
     Token,          // 访问令牌
     Image,          // 图片数据 (Base64)
     Key,            // 密钥/卡密
+    Account,        // 账号信息
+    Payment,        // 支付数据
     RawData,        // 未识别的原始数据
 }
 
@@ -44,6 +46,8 @@ public class Credential
             CapturedDataType.Token => "token",
             CapturedDataType.Image => "image",
             CapturedDataType.Key => "key",
+            CapturedDataType.Account => "account",
+            CapturedDataType.Payment => "payment",
             _ => "raw"
         },
         value = Value,

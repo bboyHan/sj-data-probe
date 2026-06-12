@@ -11,12 +11,6 @@ public class HttpRequest
     public Dictionary<string, string> Headers { get; set; } = new();
     public byte[] Body { get; set; } = Array.Empty<byte>();
     public string BodyString => Encoding.UTF8.GetString(Body);
-
-    public bool IsPayEndpoint =>
-        Url.Contains("/web_save") ||
-        Url.Contains("/CommonCallMpgo") ||
-        Url.Contains("/wechat_query") ||
-        Url.Contains("/create_order");
 }
 
 public class HttpResponse
@@ -30,19 +24,11 @@ public class HttpResponse
 
 /// <summary>
 /// Minimal HTTP/1.1 parser for TLS proxy traffic.
-/// Only parses what we need: URL, headers, and body of payment endpoints.
+/// Parses request/response lines, headers, and body.
 /// Does not support chunked transfer encoding (suitable for short responses).
 /// </summary>
 public class HttpParser
 {
-    private static readonly Regex PayUrlRegex = new(
-        @"weixin://wxpay/bizpayurl\?pr=[^\s""'<>)]+",
-        RegexOptions.Compiled);
-
-    private static readonly Regex OpenIdRegex = new(
-        @"openid=([A-F0-9]+)",
-        RegexOptions.Compiled);
-
     private static readonly string[] RequestMethods =
         { "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS" };
 
@@ -161,26 +147,5 @@ public class HttpParser
         }
 
         return response;
-    }
-
-    public string? ExtractPayUrl(string body)
-    {
-        var match = PayUrlRegex.Match(body);
-        return match.Success ? match.Value : null;
-    }
-
-    public string ExtractOpenId(string requestBody)
-    {
-        var match = OpenIdRegex.Match(requestBody);
-        return match.Success ? match.Groups[1].Value : "";
-    }
-
-    public string ExtractProductId(string url, string requestBody)
-    {
-        var match = Regex.Match(url, @"/v1/r/(\d+)/");
-        if (match.Success) return match.Groups[1].Value;
-
-        match = Regex.Match(requestBody, @"appid=(\d+)");
-        return match.Success ? match.Groups[1].Value : "";
     }
 }

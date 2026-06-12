@@ -6,6 +6,9 @@ using DataProbe.Http;
 using DataProbe.Tls;
 
 var _startTime = DateTime.UtcNow;
+var _isRunning = false;           // 真实运行状态，修复 status 硬编码 bug
+var _sessionSnapshot = new SessionSnapshot();  // 当前调查的 Session 快照
+SessionBuilder? _sessionBuilder = null;        // Session 构建器（延迟初始化）
 
 // ── Configuration ──────────────────────────────────────
 var configPath = Path.Combine(
@@ -16,7 +19,8 @@ var config = new DataProbeConfig();
 if (File.Exists(configPath))
 {
     var json = File.ReadAllText(configPath);
-    JsonSerializer.Deserialize<DataProbeConfig>(json);
+    var deserialized = JsonSerializer.Deserialize<DataProbeConfig>(json);
+    if (deserialized != null) config = deserialized;  // ← 修复：反序列化结果已赋值
 }
 
 // CLI overrides
@@ -60,6 +64,7 @@ protocolRegistry.AddParser(new Http2Parser());
 Console.WriteLine($"[DataProbe] Protocol parsers: {protocolRegistry.Count}");
 
 var channelMgr = new ChannelManager();
+var ade = new DefaultAdversarialDecisionEngine(channelMgr);
 
 var winDivertCh = new WinDivertChannel(config, connTracker, packetFilter);
 winDivertCh.SetSniKeywords(config.SniKeywords);
@@ -71,6 +76,50 @@ channelMgr.Register(dnsSpoofCh);
 
 var tlsProxyCh = new TlsProxyChannel(config, certMgr, credQueue, ruleEngine, protocolRegistry, trafficBuffer);
 channelMgr.Register(tlsProxyCh);
+
+// 系统代理通道（零权限，自动配置浏览器流量到 TlsProxy）
+try
+{
+    var sysProxyCh = new SystemProxyChannel
+    {
+        ProxyAddress = "127.0.0.1",
+        ProxyPort = config.TlsProxyPort
+    };
+    channelMgr.Register(sysProxyCh);
+    Console.Error.WriteLine($"[SystemProxy] Registered, proxy 127.0.0.1:{config.TlsProxyPort}");
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"[SystemProxy] Register failed: {ex.Message}");
+}
+
+// TUN 虚拟网卡通道（L3 全流量，需管理员）
+try
+{
+    var tunCh = new TunChannel();
+    channelMgr.Register(tunCh);
+    Console.Error.WriteLine("[TUN] Registered");
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"[TUN] Register failed: {ex.Message}");
+}
+
+// 进程 Hook 通道（突破证书锁定）
+try
+{
+    var hookCh = new ProcessHookChannel();
+    channelMgr.Register(hookCh);
+    Console.Error.WriteLine("[ProcessHook] Registered");
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"[ProcessHook] Register failed: {ex.Message}");
+}
+
+// Session 构建器（新架构 — 桥接 TlsProxy 数据到 SessionSnapshot）
+_sessionBuilder = new SessionBuilder(_sessionSnapshot);
+tlsProxyCh.OnTransactionCaptured += tx => _sessionBuilder?.AddTransaction(tx);
 
 // ── ASP.NET Core Host ─────────────────────────────────
 
@@ -114,7 +163,7 @@ app.MapGet("/status", () =>
     var wd = channelMgr.Get("WinDivert") as WinDivertChannel;
     return Results.Ok(new
     {
-        status = true ? "running" : "stopped",
+        status = _isRunning ? "running" : "stopped",  // ← 修复：使用真实运行状态
         version = "1.0.0",
         uptime_seconds = uptime.TotalSeconds,
         credentials_queued = credQueue.TotalEnqueued,
@@ -130,12 +179,14 @@ app.MapGet("/status", () =>
 app.MapPost("/start", () =>
 {
     channelMgr.StartAllAsync().GetAwaiter().GetResult();
+    _isRunning = true;  // ← 修复：更新真实运行状态
     return Results.Ok(new { status = "started" });
 }).WithName("StartCapture").WithDescription("启动所有采集通道");
 
 app.MapPost("/stop", () =>
 {
     channelMgr.StopAllAsync().GetAwaiter().GetResult();
+    _isRunning = false;  // ← 修复：更新真实运行状态
     return Results.Ok(new { status = "stopped" });
 }).WithName("StopCapture").WithDescription("停止所有采集通道");
 
@@ -178,7 +229,7 @@ app.MapPut("/config", (DataProbeConfig newConfig) =>
     return Results.Ok(new { status = "saved" });
 }).WithName("UpdateConfig").WithDescription("更新配置并持久化");
 
-app.MapPost("/api/capture/ingest", async (HttpRequest req) =>
+app.MapPost("/api/capture/ingest", async (Microsoft.AspNetCore.Http.HttpRequest req) =>
 {
     try
     {
@@ -254,10 +305,177 @@ app.MapGet("/help", () =>
             rules = "GET /rules, POST /rules, DELETE /rules/{id}",
             config = "GET /config, PUT /config",
             ingest = "POST /api/capture/ingest",
+            investigate = "POST /api/investigate/start — Start new investigation",
+            session = "GET /api/session — View current session snapshot",
+            evidence = "GET /api/evidence — View extracted evidence",
             docs = "GET /api/docs (Swagger UI)",
         }
     });
 }).WithName("GetHelp").WithDescription("API 帮助");
+
+// ── 新增：调查引擎 API ────────────────────────────────
+
+app.MapPost("/api/investigate/start", async (Microsoft.AspNetCore.Http.HttpRequest req) =>
+{
+    try
+    {
+        var body = await req.ReadFromJsonAsync<Dictionary<string, object>>();
+        var target = body?.GetValueOrDefault("target", "")?.ToString() ?? "";
+        if (string.IsNullOrEmpty(target))
+            return Results.BadRequest(new { error = "target_required" });
+
+        // 创建新的 Session 快照
+        _sessionSnapshot = new SessionSnapshot
+        {
+            TargetName = target,
+            StartedAt = DateTime.UtcNow
+        };
+        _sessionBuilder = new SessionBuilder(_sessionSnapshot);
+
+        // ⭐ ADE 阶段 I: 目标洞察
+        var profile = await ade.AnalyzeTargetAsync(target);
+
+        // ⭐ ADE 阶段 II: 生成执行计划
+        var plan = ade.CreateExecutionPlan(profile);
+
+        // 存储 TargetProfile 供后续使用
+        _sessionSnapshot.TargetRating = profile.ProtectionRating;
+
+        // 按执行计划启动通道，跳过启动失败的通道
+        var startedChannels = new List<string>();
+        foreach (var chName in plan.ChannelNames)
+        {
+            var ch = channelMgr.Get(chName);
+            if (ch == null) continue;
+
+            // 检查管理员权限要求
+            if (ch.Capability.RequiresAdmin)
+            {
+                try
+                {
+                    // 快速检查是否以管理员身份运行
+                    using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+                    var principal = new System.Security.Principal.WindowsPrincipal(identity);
+                    if (!principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator))
+                    {
+                        Console.Error.WriteLine($"[ADE] Skipping {chName}: requires admin");
+                        continue;
+                    }
+                }
+                catch
+                {
+                    // 无法检测权限时尝试启动
+                }
+            }
+
+            try
+            {
+                await ch.InitializeAsync();
+                await ch.StartAsync();
+                startedChannels.Add(chName);
+                Console.Error.WriteLine($"[ADE] Started channel: {chName}");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[ADE] Failed to start {chName}: {ex.Message}");
+            }
+        }
+
+        _isRunning = startedChannels.Count > 0;
+
+        return Results.Ok(new
+        {
+            investigation_id = _sessionSnapshot.SessionId,
+            target,
+            profile = new
+            {
+                ips = profile.IPAddresses,
+                cdn = profile.CDNProvider,
+                tls = profile.TLSVersion,
+                protection = profile.ProtectionRating.ToString(),
+                has_pinning = profile.HasCertPinning
+            },
+            plan = new
+            {
+                summary = plan.Summary,
+                channels = plan.ChannelNames,
+                coverage = plan.ExpectedCoverage,
+                limitations = plan.Limitations
+            },
+            status = _isRunning ? "started" : "no_channels_available",
+            message = plan.ChannelNames.Length > 0
+                ? $"Using {string.Join(" + ", plan.ChannelNames)}. View progress at GET /api/session"
+                : "No suitable channels available for this target."
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+}).WithName("StartInvestigation").WithDescription("发起新调查。自动侦察目标 → 选择最佳通道 → 启动采集");
+
+app.MapPost("/api/investigate/stop", () =>
+{
+    channelMgr.StopAllAsync().GetAwaiter().GetResult();
+    _isRunning = false;
+    _sessionSnapshot.CompletedAt = DateTime.UtcNow;
+    _sessionSnapshot.BuildIndex();
+
+    return Results.Ok(new
+    {
+        investigation_id = _sessionSnapshot.SessionId,
+        status = "completed",
+        steps = _sessionSnapshot.Steps.Count,
+        duration_seconds = (_sessionSnapshot.CompletedAt.Value - _sessionSnapshot.StartedAt).TotalSeconds
+    });
+}).WithName("StopInvestigation").WithDescription("停止当前调查");
+
+app.MapGet("/api/session", () =>
+{
+    return Results.Ok(new
+    {
+        session_id = _sessionSnapshot.SessionId,
+        target = _sessionSnapshot.TargetName,
+        started_at = _sessionSnapshot.StartedAt,
+        completed_at = _sessionSnapshot.CompletedAt,
+        steps = _sessionSnapshot.Steps.Select(s => new
+        {
+            step = s.StepIndex,
+            action = s.UserAction,
+            http_count = s.HttpTransactions.Count,
+            websocket_count = s.WebSocketMessages.Count,
+            schema_count = s.UrlSchemes.Count
+        }),
+        is_running = _isRunning
+    });
+}).WithName("GetSession").WithDescription("查看当前调查的 Session 快照");
+
+app.MapGet("/api/evidence", () =>
+{
+    // 从当前 Session 运行规则引擎
+    if (_sessionSnapshot.Steps.Count == 0)
+        return Results.Ok(new { total = 0, items = Array.Empty<object>() });
+
+    var evidences = ruleEngine.ProcessSessionAsync(_sessionSnapshot)
+        .GetAwaiter().GetResult();
+
+    return Results.Ok(new
+    {
+        total = evidences.Count,
+        items = evidences.Select(e => new
+        {
+            id = e.EvidenceId,
+            rule = e.RuleName,
+            type = e.Type.ToString(),
+            value = e.Value,
+            location = e.LocationId,
+            step = e.StepIndex,
+            url = e.RequestUrl,
+            confidence = e.Confidence,
+            match_type = e.MatchType.ToString()
+        })
+    });
+}).WithName("GetEvidence").WithDescription("在当前 Session 上运行规则并返回提取结果");
 
 // Export CA certificate
 app.MapGet("/cert", () =>
@@ -274,15 +492,17 @@ app.MapGet("/cert", () =>
 
 Console.WriteLine($@"
 ╔══════════════════════════════════════════════════════════╗
-║          DataProbe v1.0                                   ║
-║          Universal Data Collector Engine                   ║
+║          DataProbe v2.0 — 数据开采对抗平台                   ║
+║          Data Extraction & Anti-Defense Platform            ║
 ╠══════════════════════════════════════════════════════════╣
 ║  API Server  : http://{config.ApiBindAddress}:{config.ApiPort}       ║
 ║  HTTPS Proxy : 127.0.0.1:{config.TlsProxyPort}                        ║
 ║  Backend     : {config.BackendUrl ?? "(none)",-44}║
 ║  Rules       : {ruleEngine.RuleCount,-2} loaded                          ║
 ║  Targets     : {config.TargetDomains.Length,-2} domains                   ║
+║  Channels    : {channelMgr.ChannelCount,-2} registered                      ║
 ║  Swagger     : http://{config.ApiBindAddress}:{config.ApiPort}/api/docs  ║
+║  Investigate : POST /api/investigate/start                                ║
 ╚══════════════════════════════════════════════════════════╝");
 
 // ── Graceful Shutdown ────────────────────────────────

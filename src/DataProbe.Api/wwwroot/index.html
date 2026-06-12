@@ -3,85 +3,438 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DataProbe - Dashboard</title>
+<title>DataProbe — 数据开采对抗平台</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;padding:20px;min-width:900px}
-.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
-.header h1{font-size:22px;font-weight:700}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;min-height:100vh}
+::selection{background:#58a6ff44}
+
+/* ── Layout ── */
+.container{max-width:1100px;margin:0 auto;padding:20px}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:8px}
+.header h1{font-size:20px;font-weight:700}
 .header h1 span{color:#58a6ff}
-.status-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 14px;border-radius:12px;font-size:13px;font-weight:500}
-.status-badge.running{background:#0e4429;color:#3fb950}
-.status-badge.stopped{background:#3d1c1c;color:#f85149}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
-.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px}
-.card .label{font-size:11px;color:#8b949e;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
-.card .value{font-size:22px;font-weight:700}
+.header-right{display:flex;align-items:center;gap:12px}
+.status-badge{display:inline-flex;align-items:center;gap:6px;padding:3px 12px;border-radius:10px;font-size:12px;font-weight:500}
+.status-badge.idle{background:#161b22;color:#8b949e;border:1px solid #30363d}
+.status-badge.running{background:#0e4429;color:#3fb950;border:1px solid #238636}
+.status-badge.error{background:#3d1c1c;color:#f85149;border:1px solid #da3633}
+
+/* ── Input Section ── */
+.input-section{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-bottom:16px}
+.input-row{display:flex;gap:10px;margin-bottom:12px}
+.input-row input{flex:1;padding:10px 14px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:14px;outline:none;transition:border .2s}
+.input-row input:focus{border-color:#58a6ff}
+.input-row input::placeholder{color:#484f58}
+.input-row button{padding:10px 24px;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-start{background:#238636;color:#fff}
+.btn-start:hover{background:#2ea043}
+.btn-start:disabled{background:#1a5f2a;color:#8b949e;cursor:not-allowed}
+.btn-stop{background:#da3633;color:#fff}
+.btn-stop:hover{background:#f85149}
+.btn-secondary{background:#21262d;color:#c9d1d9;border:1px solid #30363d!important}
+.btn-secondary:hover{background:#30363d}
+
+.pack-selector{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.pack-selector label{display:flex;align-items:center;gap:6px;padding:4px 12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;font-size:12px;cursor:pointer;transition:all .2s}
+.pack-selector label:hover{border-color:#58a6ff}
+.pack-selector input{accent-color:#3fb950}
+
+/* ── Cards ── */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px}
+.card .label{font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.card .value{font-size:18px;font-weight:700}
 .card .value.green{color:#3fb950}
 .card .value.orange{color:#d29922}
 .card .value.blue{color:#58a6ff}
 .card .value.purple{color:#bc8cff}
-.controls{display:flex;gap:8px;margin-bottom:20px}
-.controls button{padding:7px 18px;border:1px solid #30363d;border-radius:6px;font-size:13px;cursor:pointer;background:#21262d;color:#c9d1d9;transition:all .15s}
-.controls button:hover{background:#30363d}
-.controls button.primary{background:#238636;border-color:#238636;color:#fff}
-.controls button.primary:hover{background:#2ea043}
-.controls button.danger{background:#da3633;border-color:#da3633;color:#fff}
-.controls button.danger:hover{background:#f85149}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;padding:8px 12px;border-bottom:2px solid #30363d;color:#8b949e;font-weight:500;font-size:11px;text-transform:uppercase}
-td{padding:8px 12px;border-bottom:1px solid #21262d;font-family:'SFMono-Regular',Consolas,monospace;font-size:12px}
-tr:hover td{background:#161b22}
-.empty{text-align:center;padding:40px;color:#8b949e;font-size:13px}
+.card .value.red{color:#f85149}
+
+/* ── Plan Section ── */
+.plan-section{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:16px;display:none}
+.plan-section.visible{display:block}
+.plan-header{margin-bottom:12px}
+.plan-header h3{font-size:14px;color:#58a6ff;margin-bottom:4px}
+.plan-detail{font-size:13px;color:#8b949e}
+.plan-channels{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.channel-tag{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:500}
+.channel-tag.active{background:#0e4429;color:#3fb950;border:1px solid #238636}
+.channel-tag.inactive{background:#21262d;color:#8b949e;border:1px solid #30363d}
+.channel-tag.limited{background:#3d1c1c;color:#f85149;border:1px solid #da3633}
+.plan-limits{margin-top:8px}
+.plan-limits li{color:#f85149;font-size:12px;margin:2px 0;list-style:none}
+.plan-limits li::before{content:"⚠ ";color:#d29922}
+
+/* ── Results ── */
+.section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.section-header h3{font-size:15px;font-weight:600}
+.evidence-group{margin-bottom:16px}
+.evidence-group h4{font-size:12px;color:#8b949e;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.evidence-group h4 .count{background:#21262d;padding:1px 7px;border-radius:8px;font-size:11px}
+
+.evidence-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px;margin-bottom:8px;transition:border-color .2s}
+.evidence-card:hover{border-color:#58a6ff}
+.evidence-row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.evidence-value{font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;font-size:13px;color:#3fb950;word-break:break-all;flex:1}
+.evidence-meta{font-size:11px;color:#8b949e;margin-top:6px;display:flex;gap:16px;flex-wrap:wrap}
+.evidence-meta span{display:flex;align-items:center;gap:4px}
+.evidence-actions{display:flex;gap:6px;flex-shrink:0}
+.btn-copy{padding:4px 10px;border:1px solid #30363d;border-radius:4px;font-size:11px;cursor:pointer;background:#21262d;color:#8b949e;transition:all .15s}
+.btn-copy:hover{background:#30363d;color:#c9d1d9}
+.btn-copy.copied{background:#0e4429;color:#3fb950;border-color:#238636}
+.type-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:10px;font-size:10px;font-weight:600}
+.type-badge.token{background:#2d1b4e;color:#bc8cff}
+.type-badge.payment{background:#3d1c1c;color:#f85149}
+.type-badge.url{background:#0e4429;color:#3fb950}
+.type-badge.key{background:#1c2d4e;color:#58a6ff}
+.type-badge.params{background:#2d2d1b;color:#d29922}
+.type-badge.raw{background:#1c1c1c;color:#8b949e}
+.confidence-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+
+/* ── Empty State ── */
+.empty-state{text-align:center;padding:60px 20px;color:#484f58}
+.empty-state .icon{font-size:48px;margin-bottom:12px}
+.empty-state p{font-size:14px}
+.empty-state .hint{font-size:12px;color:#30363d;margin-top:8px}
+
+/* ── Log ── */
+.log-section{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;margin-top:16px;max-height:200px;overflow-y:auto;display:none;font-family:'SFMono-Regular',Consolas,monospace;font-size:11px}
+.log-section.visible{display:block}
+.log-line{color:#8b949e;padding:2px 0;border-bottom:1px solid #21262d}
+.log-line:last-child{border-bottom:none}
+
+/* ── Responsive ── */
+@media(max-width:768px){
+  .input-row{flex-direction:column}
+  .input-row button{width:100%}
+  .evidence-row{flex-direction:column}
+  .evidence-actions{width:100%;justify-content:flex-end}
+}
+
+/* ── Animations ── */
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.running-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#3fb950;animation:pulse 1.5s infinite}
 </style>
 </head>
 <body>
-<div class="header">
-  <h1>⚡ <span>DataProbe</span></h1>
-  <span id="statusBadge" class="status-badge stopped">Loading...</span>
-</div>
-<div class="cards" id="statsCards">
-  <div class="card"><div class="label">Uptime</div><div class="value blue" id="uptime">-</div></div>
-  <div class="card"><div class="label">Captured</div><div class="value green" id="credTotal">0</div></div>
-  <div class="card"><div class="label">Sent</div><div class="value orange" id="credSent">0/0</div></div>
-  <div class="card"><div class="label">TLS Sessions</div><div class="value purple" id="tlsSessions">0</div></div>
-  <div class="card"><div class="label">DNS Spoofed</div><div class="value orange" id="dnsSpoofed">0</div></div>
-  <div class="card"><div class="label">Connections</div><div class="value" id="activeConns">0</div></div>
-</div>
-<div class="controls">
-  <button id="btnStart" class="primary" onclick="doAction('start')">▶ Start</button>
-  <button id="btnStop" class="danger" onclick="doAction('stop')">■ Stop</button>
-  <button onclick="window.open('/api/docs')">📖 Swagger</button>
-  <button onclick="window.open('/cert')">📜 CA Cert</button>
-  <button onclick="location.reload()">⟳ Refresh</button>
-</div>
-<table><thead><tr><th>Time</th><th>Source</th><th>Type</th><th>Value</th></tr></thead><tbody id="dataBody"></tbody></table>
-<div class="empty" id="dataEmpty">No data captured yet</div>
-<script>
-async function fetchJSON(u){const r=await fetch(u);if(!r.ok)throw new Error();return r.json()}
-async function doAction(a){try{await fetch('/'+a,{method:'POST'});await refresh()}catch(e){}}
-function fmtTime(s){if(!s)return'-';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),s2=Math.floor(s%60);return h>0?h+'h '+m+'m':m>0?m+'m '+s2+'s':s2+'s'}
-function esc(s){return(!s)?'-':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
-async function refresh(){
-  try{
-    const s=await fetchJSON('/status');
-    const b=document.getElementById('statusBadge');b.className='status-badge '+(s.status==='running'?'running':'stopped');b.textContent=s.status;
-    document.getElementById('uptime').textContent=fmtTime(s.uptime_seconds);
-    document.getElementById('credTotal').textContent=s.credentials_queued||0;
-    document.getElementById('credSent').textContent=(s.credentials_sent||0)+'/'+(s.credentials_failed||0);
-    document.getElementById('tlsSessions').textContent=s.active_tls_sessions||0;
-    document.getElementById('dnsSpoofed').textContent=s.dns_spoofed||0;
-    document.getElementById('activeConns').textContent=s.active_connections||0;
-    document.getElementById('btnStart').style.display=s.status==='running'?'none':'';
-    document.getElementById('btnStop').style.display=s.status==='running'?'':'none';
-  }catch(e){}
-  try{
-    const d=await fetchJSON('/data');const tb=document.getElementById('dataBody'),em=document.getElementById('dataEmpty');tb.innerHTML='';
-    if(d.items&&d.items.length>0){em.style.display='none';d.items.slice().reverse().forEach(i=>{const v=i.value||'';tb.innerHTML+='<tr><td style="font-size:11px;color:#8b949e">'+esc(i.captured_at?new Date(i.captured_at).toLocaleString():'-')+'</td><td style="font-size:11px">'+esc(i.source||'-')+'</td><td style="font-size:11px;color:#58a6ff">'+esc(i.type||'-')+'</td><td class="url-cell" style="max-width:500px;overflow:hidden;text-overflow:ellipsis" title="'+esc(v)+'"><span style="color:#3fb950">'+esc(v.substring(0,120))+'</span></td></tr>'})}else{em.style.display='block'}
-  }catch(e){}
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <h1>⚡ <span>DataProbe</span> <span style="font-weight:400;font-size:13px;color:#8b949e">数据开采对抗平台</span></h1>
+    <div class="header-right">
+      <span id="statusBadge" class="status-badge idle">○ Idle</span>
+      <button class="btn-secondary" onclick="toggleLog()">📋 Log</button>
+      <button class="btn-secondary" onclick="window.open('/api/docs','_blank')">📖 API</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="cards" id="statsCards">
+    <div class="card"><div class="label">Session</div><div class="value blue" id="sessionId">-</div></div>
+    <div class="card"><div class="label">Protection</div><div class="value orange" id="protection">-</div></div>
+    <div class="card"><div class="label">Channels</div><div class="value purple" id="channels">0</div></div>
+    <div class="card"><div class="label">Evidence</div><div class="value green" id="evidenceCount">0</div></div>
+    <div class="card"><div class="label">Duration</div><div class="value" id="duration">00:00</div></div>
+  </div>
+
+  <!-- Input -->
+  <div class="input-section">
+    <div class="input-row">
+      <input id="targetInput" type="text" placeholder="输入目标 — 域名 / URL / App 包名 / 文件路径" autofocus
+             onkeydown="if(event.key==='Enter')startInvestigation()">
+      <button id="btnStart" class="btn-start" onclick="startInvestigation()">▶ 开始调查</button>
+      <button id="btnStop" class="btn-stop" style="display:none" onclick="stopInvestigation()">■ 停止</button>
+    </div>
+    <div class="pack-selector">
+      <label><input type="checkbox" value="token" checked> 🔑 Token / 凭证</label>
+      <label><input type="checkbox" value="payment" checked> 💳 支付数据</label>
+      <label><input type="checkbox" value="api" checked> 📡 API 端点</label>
+      <label><input type="checkbox" value="heuristic" checked> 🤖 启发式发现</label>
+    </div>
+  </div>
+
+  <!-- Plan -->
+  <div class="plan-section" id="planSection">
+    <div class="plan-header">
+      <h3 id="planTitle">🛡️ 对抗方案</h3>
+      <div class="plan-detail" id="planDetail"></div>
+    </div>
+    <div class="plan-channels" id="planChannels"></div>
+    <div id="planLimits"></div>
+  </div>
+
+  <!-- Results -->
+  <div id="resultsArea">
+    <div class="empty-state" id="emptyState">
+      <div class="icon">🔍</div>
+      <p>输入目标，点击「开始调查」</p>
+      <p class="hint">引擎将自动侦察目标防护 → 选择最优通道 → 提取结构化数据</p>
+    </div>
+    <div id="evidenceContainer" style="display:none">
+      <div class="section-header">
+        <h3>📦 提取结果</h3>
+        <button class="btn-secondary" onclick="clearResults()">🗑 清空</button>
+      </div>
+      <div id="evidenceGroups"></div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="log-section" id="logSection">
+    <div id="logContent"></div>
+  </div>
+</div>
+
+<script>
+// ── State ──
+let investigationId = null;
+let polling = null;
+let startTime = null;
+
+const TYPE_CONFIG = {
+  token:    { label: '🔑 Token',   cls: 'token',    icon: '🔑' },
+  payment:  { label: '💳 支付',    cls: 'payment',  icon: '💳' },
+  url:      { label: '🔗 URL',     cls: 'url',      icon: '🔗' },
+  key:      { label: '🔐 Key',     cls: 'key',      icon: '🔐' },
+  params:   { label: '📄 Params',  cls: 'params',   icon: '📄' },
+  raw:      { label: '📦 Raw',     cls: 'raw',      icon: '📦' },
+};
+
+// ── API ──
+async function api(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
 }
-refresh();setInterval(refresh,3000);
+
+// ── Actions ──
+async function startInvestigation() {
+  const target = document.getElementById('targetInput').value.trim();
+  if (!target) { document.getElementById('targetInput').focus(); return; }
+
+  // Collect rule packs
+  const packs = [];
+  document.querySelectorAll('.pack-selector input:checked').forEach(cb => packs.push(cb.value));
+
+  setStatus('starting');
+  document.getElementById('btnStart').disabled = true;
+  document.getElementById('btnStart').textContent = '⏳ 侦察中...';
+
+  try {
+    const plan = packs.includes('heuristic')
+      ? {}
+      : {};
+
+    const res = await api('/api/investigate/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ target, packs })
+    });
+
+    investigationId = res.investigation_id;
+    startTime = Date.now();
+
+    // Show plan
+    showPlan(res);
+
+    // Update stats
+    document.getElementById('sessionId').textContent = res.investigation_id?.slice(-8) || 'active';
+    document.getElementById('protection').textContent = res.profile?.protection || 'N/A';
+    document.getElementById('channels').textContent = res.plan?.channels?.length || 0;
+
+    setStatus('running');
+    document.getElementById('btnStart').style.display = 'none';
+    document.getElementById('btnStop').style.display = '';
+
+    // Start polling
+    if (polling) clearInterval(polling);
+    polling = setInterval(pollResults, 3000);
+    pollResults();
+
+    addLog(`✅ 调查启动: ${target}`);
+    addLog(`📋 方案: ${res.plan?.summary || 'N/A'}`);
+    addLog(`🔗 通道: ${(res.plan?.channels || []).join(' + ')}`);
+
+  } catch (e) {
+    setStatus('error');
+    addLog(`❌ 启动失败: ${e.message}`);
+    document.getElementById('btnStart').disabled = false;
+    document.getElementById('btnStart').textContent = '▶ 开始调查';
+  }
+}
+
+async function stopInvestigation() {
+  try {
+    await api('/api/investigate/stop', { method: 'POST' });
+    if (polling) { clearInterval(polling); polling = null; }
+    setStatus('idle');
+    document.getElementById('btnStart').style.display = '';
+    document.getElementById('btnStop').style.display = 'none';
+    document.getElementById('btnStart').disabled = false;
+    document.getElementById('btnStart').textContent = '▶ 开始调查';
+    addLog('⏹ 调查已停止');
+  } catch (e) {
+    addLog(`❌ 停止失败: ${e.message}`);
+  }
+}
+
+async function pollResults() {
+  try {
+    const [session, evidence] = await Promise.all([
+      api('/api/session'),
+      api('/api/evidence')
+    ]);
+
+    // Duration
+    if (startTime) {
+      const sec = Math.floor((Date.now() - startTime) / 1000);
+      document.getElementById('duration').textContent =
+        String(Math.floor(sec/60)).padStart(2,'0') + ':' + String(sec%60).padStart(2,'0');
+    }
+
+    // Evidence count
+    document.getElementById('evidenceCount').textContent = evidence.total || 0;
+
+    if (evidence.items?.length > 0) {
+      renderEvidence(evidence.items);
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('evidenceContainer').style.display = 'block';
+    }
+
+  } catch (e) {
+    // Silently retry
+  }
+}
+
+function showPlan(res) {
+  const section = document.getElementById('planSection');
+  section.classList.add('visible');
+
+  document.getElementById('planTitle').textContent =
+    `🛡️ ${res.plan?.summary || '对抗方案'}`;
+
+  const detail = document.getElementById('planDetail');
+  detail.textContent = res.profile ?
+    `${res.target} — ${res.profile.ips?.length || 0} IPs, ${res.profile.cdn || 'no CDN'}, TLS ${res.profile.tls || 'N/A'}` : '';
+
+  const channelsDiv = document.getElementById('planChannels');
+  channelsDiv.innerHTML = (res.plan?.channels || []).map(ch =>
+    `<span class="channel-tag active">✅ ${ch}</span>`
+  ).join('');
+
+  const limitsDiv = document.getElementById('planLimits');
+  if (res.plan?.limitations?.length) {
+    limitsDiv.innerHTML = '<ul class="plan-limits">' +
+      res.plan.limitations.map(l => `<li>${l}</li>`).join('') + '</ul>';
+  } else {
+    limitsDiv.innerHTML = '';
+  }
+}
+
+function renderEvidence(items) {
+  // Group by type
+  const groups = {};
+  items.forEach(item => {
+    const t = (item.type || 'raw').toLowerCase();
+    if (!groups[t]) groups[t] = [];
+    groups[t].push(item);
+  });
+
+  const container = document.getElementById('evidenceGroups');
+  container.innerHTML = '';
+
+  Object.entries(groups).forEach(([type, evs]) => {
+    const cfg = TYPE_CONFIG[type] || TYPE_CONFIG.raw;
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'evidence-group';
+
+    groupDiv.innerHTML = `<h4>${cfg.label} <span class="count">${evs.length}</span></h4>` +
+      evs.slice(0, 50).map(e => renderCard(e, cfg)).join('');
+
+    container.appendChild(groupDiv);
+  });
+}
+
+function renderCard(e, cfg) {
+  const value = e.value || '-';
+  const confidence = (e.confidence * 100).toFixed(0);
+  const confColor = confidence >= 90 ? '#3fb950' : confidence >= 70 ? '#d29922' : '#f85149';
+
+  return `<div class="evidence-card">
+    <div class="evidence-row">
+      <div style="flex:1">
+        <div><span class="type-badge ${cfg.cls}">${cfg.icon} ${cfg.label}</span></div>
+        <div class="evidence-value" style="margin-top:6px">${escHtml(value)}</div>
+        <div class="evidence-meta">
+          <span>📍 ${e.location || '-'}</span>
+          <span>📌 ${e.rule || '-'}</span>
+          <span><span class="confidence-dot" style="background:${confColor}"></span>${confidence}%</span>
+          <span>⏱ ${e.captured_at ? new Date(e.captured_at).toLocaleTimeString() : '-'}</span>
+        </div>
+      </div>
+      <div class="evidence-actions">
+        <button class="btn-copy" onclick="copyValue(this,'${escHtml(value)}')">📋 复制</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function copyValue(btn, value) {
+  navigator.clipboard.writeText(value).then(() => {
+    btn.textContent = '✅ 已复制';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '📋 复制'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+function clearResults() {
+  document.getElementById('evidenceGroups').innerHTML = '';
+  document.getElementById('evidenceCount').textContent = '0';
+  document.getElementById('emptyState').style.display = 'block';
+  document.getElementById('evidenceContainer').style.display = 'none';
+}
+
+// ── Status ──
+function setStatus(state) {
+  const badge = document.getElementById('statusBadge');
+  const STATUS_MAP = {
+    idle:    { cls: 'idle',    text: '○ Idle' },
+    starting:{ cls: 'running', text: '⏳ Starting...' },
+    running: { cls: 'running', text: '<span class="running-dot"></span> Running' },
+    error:   { cls: 'error',   text: '✕ Error' },
+  };
+  const s = STATUS_MAP[state] || STATUS_MAP.idle;
+  badge.className = 'status-badge ' + s.cls;
+  badge.innerHTML = s.text;
+}
+
+// ── Log ──
+let logVisible = false;
+function toggleLog() {
+  logVisible = !logVisible;
+  document.getElementById('logSection').classList.toggle('visible', logVisible);
+}
+
+function addLog(msg) {
+  const log = document.getElementById('logContent');
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ── Init ──
+setStatus('idle');
+addLog('🟢 DataProbe 已就绪');
 </script>
 </body>
 </html>

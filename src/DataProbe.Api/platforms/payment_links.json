@@ -1,0 +1,53 @@
+{
+  "name": "payment_links",
+  "description": "提取支付链接 — 扫描操作流中的所有位置，发现微信/支付宝等支付 URL",
+  "priority": 100,
+  "enabled": true,
+
+  "context": {
+    "requires_operation": ["order", "pay", "checkout", "buy", "payment"],
+    "min_confidence": 0.7
+  },
+
+  "scan_locations": [
+    "response.body",
+    "response.headers",
+    "request.body",
+    "request.url",
+    "websocket.message",
+    "url.scheme"
+  ],
+
+  "matchers": [],
+
+  "extractors": [
+    {
+      "name": "wechat_pay",
+      "source": "response_body",
+      "output_field": "value",
+      "data_type": "url",
+      "pattern": "weixin://[^\\s\"'<>)]+"
+    },
+    {
+      "name": "alipay_pay",
+      "source": "response_body",
+      "output_field": "value",
+      "data_type": "url",
+      "pattern": "alipay://[^\\s\"'<>)]+"
+    },
+    {
+      "name": "payment_url_json",
+      "source": "response_body",
+      "output_field": "value",
+      "data_type": "url",
+      "pattern": "\"pay_url\"\\s*:\\s*\"([^\"]+)\""
+    },
+    {
+      "name": "payment_url_header",
+      "source": "response_body",
+      "output_field": "value",
+      "data_type": "url",
+      "pattern": "Location:\\s*(https?://[^\\s]+(?:pay|order|checkout)[^\\s]*)"
+    }
+  ]
+}

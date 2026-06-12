@@ -14,6 +14,13 @@ public class TlsProxyChannel : ICaptureChannel
 
     public string Name => "TlsProxy";
     public string Description => "SChannel MITM 代理 — HTTPS 解密 + 凭证提取";
+
+    /// <summary>转发 TlsProxy 的事务捕获事件（供 SessionBuilder 桥接）</summary>
+    public event Action<NormalizedTransaction>? OnTransactionCaptured
+    {
+        add => _proxy.OnTransactionCaptured += value;
+        remove => _proxy.OnTransactionCaptured -= value;
+    }
     public ChannelCapability Capability => new()
     {
         RequiresAdmin = false,

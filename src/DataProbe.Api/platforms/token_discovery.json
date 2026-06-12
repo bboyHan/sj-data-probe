@@ -1,0 +1,51 @@
+{
+  "name": "token_discovery",
+  "description": "发现各种 Token 和凭证 — 扫描完整操作流中的所有位置",
+  "priority": 90,
+  "enabled": true,
+
+  "context": {
+    "min_confidence": 0.7
+  },
+
+  "scan_locations": [
+    "response.body",
+    "response.headers",
+    "request.headers",
+    "request.body",
+    "request.url"
+  ],
+
+  "matchers": [],
+
+  "extractors": [
+    {
+      "name": "bearer_token",
+      "source": "response_body",
+      "output_field": "value",
+      "data_type": "token",
+      "pattern": "\"(?:access_token|token|accessToken)\"\\s*:\\s*\"([^\"]+)\""
+    },
+    {
+      "name": "jwt_token",
+      "source": "response_body",
+      "output_field": "value",
+      "data_type": "token",
+      "pattern": "eyJ[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]+"
+    },
+    {
+      "name": "authorization_header",
+      "source": "response_body",
+      "output_field": "value",
+      "data_type": "token",
+      "pattern": "Authorization:\\s*Bearer\\s+([a-zA-Z0-9_\\-./+=]+)"
+    },
+    {
+      "name": "set_cookie_session",
+      "source": "response_body",
+      "output_field": "value",
+      "data_type": "token",
+      "pattern": "Set-Cookie:\\s*(session|token|sid)=([^;]+)"
+    }
+  ]
+}
