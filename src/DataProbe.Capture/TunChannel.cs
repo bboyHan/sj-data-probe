@@ -1,26 +1,57 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using DataProbe.Core;
 
 namespace DataProbe.Capture;
 
 /// <summary>
-/// TUN 虚拟网卡通道 — 通过 WinTUN 驱动创建虚拟网卡，捕获 L3 全流量。
-/// 支持 TCP/UDP/ICMP，弥补 WinDivert 仅支持 TCP 的局限。
+/// TUN 虚拟网卡通道 — 通过 WinTUN 驱动捕获 L3 全流量。
+/// WinTUN 是 WireGuard 项目开源的虚拟网卡驱动，轻量、高性能。
 ///
-/// 技术原理：
-///   WinTUN (WireGuard 项目) 创建虚拟网卡接口
-///   系统路由将流量指向 TUN 接口
-///   用户态读取 IP 包 → 分类 → TCP/UDP 分流
-///
-/// 覆盖场景：
-///   - UDP 流量（QUIC/DoQ/游戏/视频通话）
-///   - 不走系统代理的原生 App
-///   - 非 443 端口的 TCP 流量
-///   - 跨平台（Windows/Linux/macOS 均有 TUN 实现）
+/// 设计：
+///   1. wintun.dll 创建虚拟网卡接口
+///   2. IP 包到达 TUN → PacketClassify 分类
+///   3. TCP/443 → 重写目标地址到 TlsProxy
+///   4. UDP/443 → QUIC 检测
+///   5. UDP/53 → DNS 劫持
+///   6. 其他 → 直通
 /// </summary>
 public class TunChannel : ICaptureChannel
 {
+    // ── WinTUN P/Invoke ──
+
+    private const string WinTunDll = "wintun.dll";
+
+    [DllImport(WinTunDll, CallingConvention = CallingConvention.Cdecl)]
+    private static extern nint WintunOpen([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
+
+    [DllImport(WinTunDll, CallingConvention = CallingConvention.Cdecl)]
+    private static extern nint WintunStartSession(nint adapter, int capacity);
+
+    [DllImport(WinTunDll, CallingConvention = CallingConvention.Cdecl)]
+    private static extern nint WintunReceivePacket(nint session, out int size);
+
+    [DllImport(WinTunDll, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void WintunReleaseReceive(nint session, nint packet);
+
+    [DllImport(WinTunDll, CallingConvention = CallingConvention.Cdecl)]
+    private static extern nint WintunAllocateSendPacket(nint session, int size);
+
+    [DllImport(WinTunDll, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void WintunSendPacket(nint session, nint packet);
+
+    [DllImport(WinTunDll, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void WintunCloseAdapter(nint adapter);
+
+    [DllImport(WinTunDll, CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.LPWStr)]
+    private static extern string WintunGetLastError(nint adapter);
+
+    // ── 成员 ──
+
+    private nint _adapter;
+    private nint _session;
     private CancellationTokenSource? _cts;
     private Task? _readTask;
     private bool _isRunning;
@@ -35,39 +66,35 @@ public class TunChannel : ICaptureChannel
         RequiresCertInstall = false,
         CanIntercept = true,
         CanDecryptTls = false,
-        CanModify = false,
+        CanModify = true,
         CanInject = false,
         SupportedProtocols = new[] { "TCP", "UDP", "ICMP", "QUIC" },
-        SupportedPlatforms = new[] { "windows", "linux", "macos" },
+        SupportedPlatforms = new[] { "windows" },
         TargetScenarios = new[] { "app", "game", "mobile" },
-        AntiCheatConflicts = Array.Empty<string>(),
         Limitations = new[]
         {
-            "需要管理员权限创建虚拟网卡",
+            "需要管理员权限 + WinTUN 驱动",
             "不解密 TLS（需配合 TlsProxy）",
-            "用户态读取 IP 包有额外 CPU 开销"
+            "用户态读取有额外 CPU 开销"
         },
-        ScopeDescription = "TUN 虚拟网卡 — 全流量 L3 捕获"
+        ScopeDescription = "TUN 虚拟网卡 — L3 全流量"
     };
 
     public bool IsHealthy => _isRunning;
-
     public event Action<RawPacket>? OnPacket;
 
-    /// <summary>TUN 网卡名称</summary>
-    public string InterfaceName { get; set; } = "dataprobe_tun";
-
-    /// <summary>TUN 网卡 IP 地址</summary>
-    public string InterfaceAddress { get; set; } = "10.0.8.1";
-
-    /// <summary>TUN 网卡子网掩码</summary>
-    public string InterfaceNetmask { get; set; } = "255.255.255.0";
-
-    /// <summary>TlsProxy 地址（TCP/443 流量转发目标）</summary>
+    /// <summary>TlsProxy 目标地址</summary>
     public string TlsProxyAddress { get; set; } = "127.0.0.1";
-
-    /// <summary>TlsProxy 端口</summary>
     public int TlsProxyPort { get; set; } = 18802;
+
+    /// <summary>目标域名列表（仅这些域名的流量会被深度处理）</summary>
+    public string[] TargetDomains { get; set; } = Array.Empty<string>();
+
+    /// <summary>发包计数器</summary>
+    public long PacketsRead => Interlocked.Read(ref _packetsRead);
+    public long PacketsClassified => Interlocked.Read(ref _packetsClassified);
+    private long _packetsRead;
+    private long _packetsClassified;
 
     public Task<bool> InitializeAsync()
     {
@@ -80,14 +107,37 @@ public class TunChannel : ICaptureChannel
         if (_isRunning) return Task.CompletedTask;
 
         _cts = new CancellationTokenSource();
-        _isRunning = true;
 
-        // TUN 通道启动分为两步：
-        // 1. 安装/打开 TUN 接口（需要 WinTUN 驱动）
-        // 2. 启动 IP 包读取循环（用户态读取原始 IP 包）
-        _readTask = Task.Run(() => PacketReadLoop(_cts.Token));
+        try
+        {
+            // 1) 打开 WinTUN 适配器
+            _adapter = WintunOpen("DataProbeTun");
+            if (_adapter == nint.Zero)
+            {
+                Console.Error.WriteLine("[TUN] Failed to open adapter (run as admin)");
+                return Task.CompletedTask;
+            }
 
-        Console.Error.WriteLine($"[TUN] Started (addr={InterfaceAddress}, tls_proxy={TlsProxyAddress}:{TlsProxyPort})");
+            // 2) 创建会话
+            _session = WintunStartSession(_adapter, 0x100000); // 1MB ring buffer
+            if (_session == nint.Zero)
+            {
+                Console.Error.WriteLine("[TUN] Failed to start session");
+                WintunCloseAdapter(_adapter);
+                return Task.CompletedTask;
+            }
+
+            // 3) 启动读取循环
+            _isRunning = true;
+            _readTask = Task.Run(() => PacketReadLoop(_cts.Token));
+
+            Console.Error.WriteLine($"[TUN] Started (proxy={TlsProxyAddress}:{TlsProxyPort})");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[TUN] Start failed: {ex.Message}");
+        }
+
         return Task.CompletedTask;
     }
 
@@ -97,98 +147,215 @@ public class TunChannel : ICaptureChannel
 
         _cts?.Cancel();
         _isRunning = false;
+
+        if (_session != nint.Zero)
+        {
+            // 释放 session（WinTUN 会在 CloseAdapter 时自动清理）
+            _session = nint.Zero;
+        }
+
+        if (_adapter != nint.Zero)
+        {
+            WintunCloseAdapter(_adapter);
+            _adapter = nint.Zero;
+        }
+
         Console.Error.WriteLine("[TUN] Stopped");
         return Task.CompletedTask;
     }
 
     /// <summary>
-    /// IP 包读取循环（骨架 — 完整实现在 Phase 6 中由 WinTUN P/Invoke 驱动）
+    /// IP 包读取循环 — 从 TUN 读取原始 IP 包，分类处理
     /// </summary>
     private async Task PacketReadLoop(CancellationToken ct)
     {
-        // Phase 6 完整实现：
-        // 1. WinTUN P/Invoke: wintun_open() → 获取 TUN 会话句柄
-        // 2. 循环: wintun_read() → 获取原始 IP 包
-        // 3. IP 包分类器判断协议类型
-        //    ├─ TCP/443 → 重写目标地址为 TlsProxy → TUN 写出
-        //    ├─ TCP/80  → 解析 HTTP → 提取
-        //    ├─ UDP/443 → QUIC 检测 → SNI 提取
-        //    ├─ UDP/53  → DNS 劫持
-        //    └─ 其他    → RawPacket 输出
-        // 4. 非目标流量 → 直接路由到真实网关
-
         try
         {
-            while (!ct.IsCancellationRequested)
+            while (!ct.IsCancellationRequested && _session != nint.Zero)
             {
-                await Task.Delay(100, ct); // 占位：等待真实实现
+                // 1) 从 TUN 读取原始 IP 包
+                var packet = WintunReceivePacket(_session, out int size);
+                if (packet == nint.Zero || size < 20)
+                {
+                    await Task.Delay(1, ct); // 无包时短暂休眠
+                    continue;
+                }
+
+                Interlocked.Increment(ref _packetsRead);
+
+                // 2) 复制到托管数组
+                var ipPacket = new byte[size];
+                Marshal.Copy(packet, ipPacket, 0, size);
+                WintunReleaseReceive(_session, packet);
+
+                // 3) 分类
+                var classification = ClassifyPacket(ipPacket, size);
+                if (classification.Action == PacketAction.Pass)
+                    continue; // 非目标流量，直接放行（不在 TUN 中处理）
+
+                Interlocked.Increment(ref _packetsClassified);
+
+                // 4) 按分类处理
+                switch (classification.Action)
+                {
+                    case PacketAction.RedirectTls:
+                        RedirectToTlsProxy(ipPacket, size);
+                        break;
+
+                    case PacketAction.DnsIntercept:
+                        HandleDnsIntercept(ipPacket, size);
+                        break;
+
+                    case PacketAction.QuicDetect:
+                        ExtractQuicSni(ipPacket, size);
+                        break;
+
+                    default:
+                        // 输出 RawPacket 供其他通道处理
+                        OnPacket?.Invoke(new RawPacket
+                        {
+                            Data = ipPacket,
+                            SourceChannel = Name,
+                            Timestamp = DateTime.UtcNow,
+                            Metadata = new PacketMetadata
+                            {
+                                DestPort = classification.DestPort,
+                                DestAddress = classification.DestAddress?.ToString(),
+                                Protocol = classification.Protocol == 6 ? "TCP" :
+                                           classification.Protocol == 17 ? "UDP" : "Other"
+                            }
+                        });
+                        break;
+                }
             }
         }
         catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[TUN] Loop error: {ex.Message}");
+        }
     }
 
     /// <summary>
-    /// IP 包分类器 — 判断协议类型并决定处理方式
+    /// 重写 IP 包目标地址到 TlsProxy（内核旁路）
     /// </summary>
+    private void RedirectToTlsProxy(byte[] ipPacket, int length)
+    {
+        try
+        {
+            if (length < 40) return;
+
+            // 修改目标 IP 为 127.0.0.1
+            var proxyBytes = new IPEndPoint(IPAddress.Parse(TlsProxyAddress), 0).Address.GetAddressBytes();
+            // IPv4 目标地址在偏移 16-19
+            Buffer.BlockCopy(proxyBytes, 0, ipPacket, 16, 4);
+
+            // 修改目标端口（TCP 头偏移 = IP 头长度，源端口在偏移 0, 目标端口在 2）
+            int ipHeaderLen = (ipPacket[0] & 0x0F) * 4;
+            ipPacket[ipHeaderLen + 2] = (byte)(TlsProxyPort >> 8);
+            ipPacket[ipHeaderLen + 3] = (byte)(TlsProxyPort & 0xFF);
+
+            // 重新计算 IP 校验和
+            UpdateChecksum(ipPacket, length);
+
+            // 写回 TUN
+            var sendPacket = WintunAllocateSendPacket(_session, length);
+            if (sendPacket != nint.Zero)
+            {
+                Marshal.Copy(ipPacket, 0, sendPacket, length);
+                WintunSendPacket(_session, sendPacket);
+            }
+        }
+        catch { }
+    }
+
+    private static void HandleDnsIntercept(byte[] ipPacket, int length)
+    {
+        // DNS 劫持由 DnsSpoofChannel 处理，此处仅输出事件
+        // TUN 中检测到 DNS 查询时转发事件
+    }
+
+    private static void ExtractQuicSni(byte[] ipPacket, int length)
+    {
+        // QUIC Initial Packet 中的 TLS ClientHello 包含 SNI
+        // 在后续 Phase 中实现完整 QUIC 检测
+    }
+
+    /// <summary>简单 IP 校验和计算</summary>
+    private static void UpdateChecksum(byte[] ipPacket, int length)
+    {
+        if (length < 20) return;
+
+        // 清零原校验和
+        ipPacket[10] = 0;
+        ipPacket[11] = 0;
+
+        int headerLen = (ipPacket[0] & 0x0F) * 4;
+        long sum = 0;
+        for (int i = 0; i < headerLen; i += 2)
+        {
+            if (i + 1 < length)
+                sum += (ipPacket[i] << 8) | ipPacket[i + 1];
+        }
+
+        while (sum > 0xFFFF)
+            sum = (sum & 0xFFFF) + (sum >> 16);
+
+        ipPacket[10] = (byte)(~sum >> 8);
+        ipPacket[11] = (byte)(~sum & 0xFF);
+    }
+
+    // ── IP 包分类 ──
+
     public static PacketClassifyResult ClassifyPacket(byte[] ipPacket, int length)
     {
         if (length < 20) return new PacketClassifyResult { Action = PacketAction.Pass };
 
-        // IPv4 版本检测 (version 4 = 0x45-0x4F)
         int version = (ipPacket[0] >> 4) & 0x0F;
         if (version != 4) return new PacketClassifyResult { Action = PacketAction.Pass };
 
         int headerLen = (ipPacket[0] & 0x0F) * 4;
-        if (headerLen < 20 || headerLen > length) return new PacketClassifyResult { Action = PacketAction.Pass };
+        if (headerLen < 20 || headerLen > length)
+            return new PacketClassifyResult { Action = PacketAction.Pass };
 
-        byte protocol = ipPacket[9]; // Protocol field
-        int totalLen = (ipPacket[2] << 8) | ipPacket[3];
-        if (totalLen > length) totalLen = length;
+        byte protocol = ipPacket[9];
 
-        var destIp = new IPAddress(ipPacket[headerLen..(headerLen + 4)]);
+        var destAddr = new IPAddress(ipPacket[16..20]);
         int destPort = 0;
 
-        if (protocol == 6) // TCP
-        {
-            if (headerLen + 2 <= length)
-                destPort = (ipPacket[headerLen + 2] << 8) | ipPacket[headerLen + 3];
-        }
-        else if (protocol == 17) // UDP
-        {
-            if (headerLen + 2 <= length)
-                destPort = (ipPacket[headerLen] << 8) | ipPacket[headerLen + 1];
-        }
+        if (protocol == 6 && headerLen + 4 <= length) // TCP
+            destPort = (ipPacket[headerLen + 2] << 8) | ipPacket[headerLen + 3];
+        else if (protocol == 17 && headerLen + 2 <= length) // UDP
+            destPort = (ipPacket[headerLen] << 8) | ipPacket[headerLen + 1];
+
+        // 127.0.0.1 回环流量跳过
+        if (destAddr.Equals(IPAddress.Loopback))
+            return new PacketClassifyResult { Action = PacketAction.Pass };
 
         return new PacketClassifyResult
         {
             Action = ClassifyAction(protocol, destPort),
             Protocol = protocol,
             DestPort = destPort,
-            DestAddress = destIp
+            DestAddress = destAddr
         };
     }
 
-    private static PacketAction ClassifyAction(byte protocol, int destPort)
+    private static PacketAction ClassifyAction(byte protocol, int port)
     {
         return protocol switch
         {
-            6 when destPort == 443 => PacketAction.RedirectTls,    // TCP/443 → TLS Proxy
-            6 when destPort == 80 => PacketAction.ParseHttp,       // TCP/80 → HTTP 解析
-            17 when destPort == 443 => PacketAction.QuicDetect,    // UDP/443 → QUIC 检测
-            17 when destPort == 53 => PacketAction.DnsIntercept,   // UDP/53 → DNS 劫持
-            _ => PacketAction.Pass                                 // 其他 → 直通
+            6 when port == 443 => PacketAction.RedirectTls,
+            6 when port == 80 => PacketAction.Pass,       // HTTP 暂不处理
+            17 when port == 53 => PacketAction.DnsIntercept,
+            17 when port == 443 => PacketAction.QuicDetect,
+            _ => PacketAction.Pass
         };
     }
 
-    public void Dispose()
-    {
-        StopAsync().GetAwaiter().GetResult();
-    }
+    public void Dispose() => StopAsync().GetAwaiter().GetResult();
 }
 
-/// <summary>
-/// IP 包分类结果
-/// </summary>
 public class PacketClassifyResult
 {
     public PacketAction Action { get; set; }
@@ -197,14 +364,4 @@ public class PacketClassifyResult
     public IPAddress? DestAddress { get; set; }
 }
 
-/// <summary>
-/// IP 包处理动作
-/// </summary>
-public enum PacketAction
-{
-    Pass,           // 直通（不拦截）
-    RedirectTls,    // 重定向到 TLS Proxy
-    ParseHttp,      // 解析 HTTP
-    QuicDetect,     // QUIC 检测 + SNI 提取
-    DnsIntercept    // DNS 劫持
-}
+public enum PacketAction { Pass, RedirectTls, DnsIntercept, QuicDetect }

@@ -66,6 +66,24 @@ Console.WriteLine($"[DataProbe] Protocol parsers: {protocolRegistry.Count}");
 var channelMgr = new ChannelManager();
 var ade = new DefaultAdversarialDecisionEngine(channelMgr);
 
+// 插件管理器（统一扩展入口）
+var pluginMgr = new DataProbe.Core.Plugin.PluginManager();
+pluginMgr.OnChannelDiscovered += (name, ch) =>
+{
+    try { channelMgr.Register(ch); Console.Error.WriteLine($"[Plugin] Channel loaded: {name}"); }
+    catch (Exception ex) { Console.Error.WriteLine($"[Plugin] Channel {name} registration failed: {ex.Message}"); }
+};
+pluginMgr.OnParserDiscovered += (name, parser) =>
+{
+    try { if (parser is DataProbe.Http.IProtocolParser p) protocolRegistry.AddParser(p); Console.Error.WriteLine($"[Plugin] Parser loaded: {name}"); }
+    catch (Exception ex) { Console.Error.WriteLine($"[Plugin] Parser {name} registration failed: {ex.Message}"); }
+};
+pluginMgr.OnRuleDiscovered += (name, rule) =>
+{
+    try { ruleEngine.SaveRule(rule); Console.Error.WriteLine($"[Plugin] Rule loaded: {name}"); }
+    catch (Exception ex) { Console.Error.WriteLine($"[Plugin] Rule {name} registration failed: {ex.Message}"); }
+};
+
 var winDivertCh = new WinDivertChannel(config, connTracker, packetFilter);
 winDivertCh.SetSniKeywords(config.SniKeywords);
 channelMgr.Register(winDivertCh);
@@ -116,6 +134,20 @@ catch (Exception ex)
 {
     Console.Error.WriteLine($"[ProcessHook] Register failed: {ex.Message}");
 }
+
+// 加载插件（扫描 plugins/ 目录，自动注册通道/解析器/规则包）
+_ = Task.Run(async () =>
+{
+    try
+    {
+        await pluginMgr.LoadAllAsync();
+        Console.Error.WriteLine($"[PluginManager] Scan complete, {pluginMgr.Count} extensions loaded");
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"[PluginManager] Scan error: {ex.Message}");
+    }
+});
 
 // Session 构建器（新架构 — 桥接 TlsProxy 数据到 SessionSnapshot）
 _sessionBuilder = new SessionBuilder(_sessionSnapshot);

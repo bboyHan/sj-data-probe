@@ -26,7 +26,13 @@ public class ReAnalyzer
         _scanners.Add(new StringScanner());
         _scanners.Add(new CertPinningDetector());
         _scanners.Add(new AntiEmulatorDetector());
+        _scanners.Add(new ApkManifestScanner());
+        _scanners.Add(new PeImportScanner());
     }
+
+    /// <summary>指定文件类型支持哪些扫描器</summary>
+    public string[] SupportedFileTypes { get; set; } = { "apk", "pe", "dll", "exe", "elf", "zip" };
+
 
     /// <summary>
     /// 分析目标文件并增强 TargetProfile

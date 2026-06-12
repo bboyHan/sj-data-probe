@@ -156,9 +156,9 @@ public interface IProtocolPlugin : IDataProbePlugin
     /// <summary>判断原始字节是否匹配此协议</summary>
     bool CanParse(ReadOnlySpan<byte> data);
 
-    /// <summary>解析请求，返回统一事务格式</summary>
-    ParseResult? ParseRequest(ReadOnlySpan<byte> data);
+    /// <summary>解析请求，返回 JSON 格式字符串</summary>
+    string? ParseRequest(ReadOnlySpan<byte> data);
 
     /// <summary>解析响应</summary>
-    ParseResult? ParseResponse(ReadOnlySpan<byte> data);
+    string? ParseResponse(ReadOnlySpan<byte> data);
 }

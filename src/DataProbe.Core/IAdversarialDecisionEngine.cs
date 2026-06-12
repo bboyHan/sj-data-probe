@@ -71,39 +71,6 @@ public interface IRuleEngine
 }
 
 /// <summary>
-/// 协议解析器接口 — 每种协议实现一个。
-/// 职责：检测协议 → 解析请求/响应 → 产出 NormalizedTransaction
-/// </summary>
-public interface IProtocolParser
-{
-    /// <summary>协议名称，如 "HTTP/1.1"、"HTTP/2"、"WebSocket"</summary>
-    string ProtocolName { get; }
-
-    /// <summary>判断原始字节是否匹配此协议</summary>
-    bool CanParse(ReadOnlySpan<byte> data);
-
-    /// <summary>尝试从原始字节中解析出请求</summary>
-    ParseResult? ParseRequest(ReadOnlySpan<byte> data);
-
-    /// <summary>尝试从原始字节中解析出响应</summary>
-    ParseResult? ParseResponse(ReadOnlySpan<byte> data);
-}
-
-/// <summary>
-/// 解析结果 — 统一的中间表示
-/// </summary>
-public class ParseResult
-{
-    public string Method { get; set; } = "";
-    public string Path { get; set; } = "";
-    public string QueryString { get; set; } = "";
-    public Dictionary<string, string> Headers { get; set; } = new();
-    public byte[] Body { get; set; } = Array.Empty<byte>();
-    public int StatusCode { get; set; }
-    public string BodyString => System.Text.Encoding.UTF8.GetString(Body);
-}
-
-/// <summary>
 /// 调查上下文 — 贯穿五阶段流水线的状态。
 /// </summary>
 public class InvestigationContext

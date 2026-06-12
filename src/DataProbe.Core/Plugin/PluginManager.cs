@@ -54,8 +54,8 @@ public class PluginManager : IDisposable
     /// <summary>通道发现回调：Action(channelName, ICaptureChannel)</summary>
     public event Action<string, ICaptureChannel>? OnChannelDiscovered;
 
-    /// <summary>协议解析器发现回调</summary>
-    public event Action<string, IProtocolParser>? OnParserDiscovered;
+    /// <summary>协议解析器发现回调（object 因为 IProtocolParser 在 DataProbe.Http 中）</summary>
+    public event Action<string, object>? OnParserDiscovered;
 
     /// <summary>规则包发现回调</summary>
     public event Action<string, PlatformRule>? OnRuleDiscovered;
@@ -170,13 +170,18 @@ public class PluginManager : IDisposable
                 }
             }
 
-            // 2) IProtocolParser
-            if (typeof(IProtocolParser).IsAssignableFrom(type))
+            // 2) IDataProbePlugin 及其子接口（也用于识别 IProtocolParser 等非标准接口）
+            // IProtocolParser 的发现通过单独的类型名检查（因为它在 DataProbe.Http 中定义）
+            var isProtocolParser = type.GetInterfaces().Any(i =>
+                i.Name == "IProtocolParser" && i.Namespace == "DataProbe.Http");
+            if (isProtocolParser)
             {
-                if (Activator.CreateInstance(type) is IProtocolParser parser)
+                var instance = Activator.CreateInstance(type);
+                if (instance != null)
                 {
-                    lock (_lock) _extensions[$"parser:{parser.ProtocolName}"] = parser;
-                    OnParserDiscovered?.Invoke(parser.ProtocolName, parser);
+                    var name = type.GetProperty("ProtocolName")?.GetValue(instance)?.ToString() ?? type.Name;
+                    lock (_lock) _extensions[$"parser:{name}"] = instance;
+                    OnParserDiscovered?.Invoke(name, instance);
                     found++;
                 }
             }
