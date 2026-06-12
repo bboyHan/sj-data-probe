@@ -1,5 +1,6 @@
 using System.Text;
 using DataProbe.Core;
+using DataProbe.Core.Plugin;
 
 namespace DataProbe.Extractor.ReverseEngineering;
 
@@ -7,36 +8,29 @@ namespace DataProbe.Extractor.ReverseEngineering;
 /// 逆向分析引擎 — 对目标文件（APK/IPA/DLL/EXE）自动执行静态分析，
 /// 提取 API 端点、检测安全防护、识别加密算法。
 ///
-/// 分析流水线：
-///   输入文件 → 类型检测 → 并行分析器 → 聚合报告 → TargetProfile 增强
+/// 支持插件扩展：PluginManager 中注册的 IReScannerPlugin 自动参与分析。
 ///
-/// Phase 5 完整实现路线：
-///   V1: 文件类型检测 + 字符串扫描 + 基础特征提取
-///   V2: APK 解包 + AndroidManifest.xml 解析 + SSL 锁定检测
-///   V3: PE 解析 + 导入表分析 + 反作弊驱动检测
-///   V4: iOS IPA 解析 + Info.plist + ATS 检测
+/// 分析流水线：
+///   输入文件 → 类型检测 → 并行扫描器（内置 + 插件）→ 聚合报告
 /// </summary>
 public class ReAnalyzer
 {
     private readonly List<IReScanner> _scanners = new();
+    private readonly PluginManager? _pluginManager;
 
-    public ReAnalyzer()
+    public ReAnalyzer(PluginManager? pluginManager = null)
     {
+        _pluginManager = pluginManager;
+
         // 注册内置扫描器
         _scanners.Add(new StringScanner());
         _scanners.Add(new CertPinningDetector());
         _scanners.Add(new AntiEmulatorDetector());
-        // Phase 5 后续:
-        // _scanners.Add(new ApkManifestScanner());
-        // _scanners.Add(new PeImportScanner());
-        // _scanners.Add(new EncryptionDetector());
     }
 
     /// <summary>
     /// 分析目标文件并增强 TargetProfile
     /// </summary>
-    /// <param name="fileData">文件原始字节</param>
-    /// <param name="profile">要增强的目标情报</param>
     public void Analyze(byte[] fileData, TargetProfile profile)
     {
         if (fileData == null || fileData.Length < 4) return;
@@ -44,11 +38,30 @@ public class ReAnalyzer
         var fileType = DetectFileType(fileData);
         Console.Error.WriteLine($"[RE] File type: {fileType}, size: {fileData.Length} bytes");
 
-        // 运行所有注册的扫描器
+        // 1) 运行内置扫描器
         foreach (var scanner in _scanners)
         {
             var findings = scanner.Scan(fileData, fileType);
             ApplyFindings(findings, profile);
+        }
+
+        // 2) 运行插件扫描器（按目标筛选）
+        if (_pluginManager != null)
+        {
+            var pluginScanners = _pluginManager.GetScannersFor(fileType, fileData);
+            foreach (var plugin in pluginScanners)
+            {
+                try
+                {
+                    var findings = plugin.Scan(fileData, fileType);
+                    Console.Error.WriteLine($"[RE] Plugin scanner '{plugin.Name}' found {findings.Length} items");
+                    ApplyFindings(findings, profile);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[RE] Plugin scanner '{plugin.Name}' error: {ex.Message}");
+                }
+            }
         }
     }
 
@@ -130,29 +143,6 @@ public interface IReScanner
 {
     string Name { get; }
     ReFinding[] Scan(byte[] fileData, string fileType);
-}
-
-/// <summary>扫描发现项</summary>
-public class ReFinding
-{
-    public FindingCategory Category { get; set; }
-    public string Value { get; set; } = "";
-    public string Detail { get; set; } = "";
-    public int Offset { get; set; }
-    public float Confidence { get; set; } = 1.0f;
-}
-
-public enum FindingCategory
-{
-    CertPinning,
-    AntiEmulator,
-    AntiDebug,
-    ApiEndpoint,
-    HardcodedToken,
-    SdkDetected,
-    UrlScheme,
-    CustomEncryption,
-    AntiCheat
 }
 
 /// <summary>字符串扫描器 — 提取 URL/Token/Key</summary>
