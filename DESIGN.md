@@ -113,6 +113,49 @@ DataProbe: "告诉我问题，我给你答案"
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### 2.2 核心设计原则
+
+```
+原则 1: 数据模型先行
+  所有数据不管来源（WinDivert/TUN/Hook/RE），统一为 SessionSnapshot
+  规则引擎只认一种数据结构，不关心数据怎么来的
+
+原则 2: 通道与逻辑分离
+  通道只负责"捕获原始数据"
+  逻辑层（解析/解密/提取）不依赖具体通道
+  通道可插拔，逻辑层不变
+
+原则 3: 遇阻透明降级
+  每个通道声明自己的能力 + 限制
+  ADE 根据目标情报 + 当前状态选择/切换通道
+  用户看到的是"方案 A 不行 → 自动换方案 B"
+
+原则 4: 一切结果可溯源
+  每个提取结果都附证据链：
+  "什么规则 / 哪个步骤 / 哪个位置 / 原始数据片段"
+
+原则 5: 插件化是架构层原则（★本设计的核心差异化）
+  所有扩展点通过统一的 plugins/ 目录加载。
+  插件与内置代码享有完全相同的 SPI 接口。
+  Program.cs 不区分"哪些是内置的，哪些是插件来的"。
+  热加载：FileSystemWatcher 监听 plugins/ 变更 → 自动重新加载。
+
+  支持的扩展点：
+  ├─ 通道 (ICaptureChannel)          → channels/*.dll
+  ├─ 协议解析器 (IProtocolParser)    → parsers/*.dll
+  ├─ 逆向扫描器                       → scanners/*.dll
+  ├─ 应用层解密器                     → decryption/*.dll
+  ├─ 高级提取器                       → extractors/*.dll
+  ├─ 验证码处理器                     → challenges/*.dll
+  ├─ 规则包                           → rules/*.json
+  ├─ TLS 指纹模板                     → fingerprints/*.json
+  └─ 设备指纹配置                     → devices/*.json
+
+  这确保：
+  - 每次攻克一个新目标，不需要改主代码
+  - 特定目标的定制逻辑以独立 .dll 存在
+  - 社区可分享插件而不暴露主代码
+```
 ...
 
 ## 16. 插件体系
@@ -150,38 +193,58 @@ DataProbe 的核心挑战是：**每个目标都有独特的自定义加密、�
 └──────────────────────────────────────────────────────────┘
 ```
 
-### 16.3 插件架构
+### 16.3 统一的扩展发现机制
 
 ```
+PluginManager 是覆盖全产品扩展点的统一入口。
+它不区分"这个是插件接口"和"那个是内置 SPI"——
+ICaptureChannel、IProtocolParser、IReScannerPlugin 都在同一个发现流程中。
+
 ┌─ 插件目录结构 ───────────────────────────────────────┐
 │  plugins/                                              │
-│  ├── scanners/              ← 逆向扫描器               │
-│  │   ├── DouyinScanner.dll    ← 抖音专扫               │
-│  │   └── WeChatMiniProgram.dll                        │
-│  ├── decryption/            ← 应用层解密器             │
-│  │   ├── TaobaoMtopCrypto.dll                          │
-│  │   └── ShopAppCrypto.dll                             │
-│  ├── extractors/            ← 高级提取器               │
-│  └── challenges/            ← 验证码处理器             │
+│  ├── channels/           ← ICaptureChannel (.dll)      │
+│  │   └── MyProtocolChannel.dll                         │
+│  ├── parsers/            ← IProtocolParser (.dll)      │
+│  │   └── MqttParser.dll                                │
+│  ├── scanners/           ← IReScannerPlugin (.dll)     │
+│  │   ├── DouyinScanner.dll                             │
+│  │   └── WeChatMiniProgram.dll                         │
+│  ├── decryption/         ← IDecryptionPlugin (.dll)    │
+│  │   └── TaobaoMtopCrypto.dll                          │
+│  ├── extractors/         ← IExtractorPlugin (.dll)     │
+│  ├── challenges/         ← 验证码处理器 (.dll)         │
+│  ├── rules/              ← 提取规则包 (.json)          │
+│  ├── fingerprints/       ← TLS 指纹模板 (.json)        │
+│  └── devices/            ← 设备指纹配置 (.json)        │
 │                                                        │
-│  每个 .dll 引用 DataProbe.Core，实现一个或多个         │
-│  IDataProbePlugin 子接口                               │
+│  宿主应用通过 PluginManager 的事件回调接收发现结果:     │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │  PluginManager                                   │  │
+│  │  ├─ OnChannelDiscovered       → ChannelManager   │  │
+│  │  ├─ OnParserDiscovered        → ProtocolRegistry │  │
+│  │  ├─ OnPluginDiscovered        → ADE              │  │
+│  │  ├─ OnRuleDiscovered          → RuleEngine       │  │
+│  │  └─ OnFingerprintDiscovered   → FingerprintEngine│  │
+│  └──────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────┘
 
 ┌─ 插件生命周期 ────────────────────────────────────────┐
 │                                                        │
-│  启动时 → PluginManager 扫描 plugins/ 目录              │
-│       → Assembly.LoadFrom() 加载每个 .dll               │
-│       → 反射发现所有 IDataProbePlugin 实现              │
-│       → 调用 InitializeAsync()                         │
-│       → 注册到按类型的索引                              │
+│  启动时 → PluginManager 扫描 plugins/ 所有子目录        │
+│       → .dll: Assembly.LoadFrom → 反射发现              │
+│         ├─ ICaptureChannel  → OnChannelDiscovered      │
+│         ├─ IProtocolParser  → OnParserDiscovered       │
+│         └─ IDataProbePlugin → OnPluginDiscovered       │
+│       → .json: 按目录规则解析                           │
+│         ├─ rules/*.json     → OnRuleDiscovered         │
+│         └─ fingerprints/*.json→ OnFingerprintDiscovered│
 │                                                        │
-│  运行时 → FileSystemWatcher 监听文件变更                │
-│       → 新增/变更 .dll → 自动重新加载                  │
+│  运行时 → FileSystemWatcher 监听 plugins/ 变更          │
+│       → 新增/变更 → 自动重新加载                       │
 │                                                        │
-│  调用点 → ReAnalyzer 运行前查询插件扫描器               │
-│       → RuleEngine 提取前查询解密器/提取器             │
-│       → TlsProxy 解密后调用解密器链                    │
+│  使用方 → 不关心扩展是内置的还是插件的                   │
+│         → ChannelManager / ProtocolRegistry / ADE       │
+│           统一管理所有来源的扩展                          │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -201,6 +264,10 @@ DataProbe 的核心挑战是：**每个目标都有独特的自定义加密、�
   IDecryptionPlugin    → CanDecrypt() + DecryptAsync()
   IExtractorPlugin     → CanExtract() + ExtractAsync()
   IProtocolPlugin      → CanParse() + ParseRequest/Response()
+
+非 IDataProbePlugin 接口（通过 PluginManager 统一发现）:
+  ICaptureChannel      → Name + Capability + Start/Stop
+  IProtocolParser      → ProtocolName + CanParse + ParseRequest/Response
 ```
 
 ### 16.5 插件开发规范
