@@ -139,6 +139,9 @@ public class ExecutionPlan
     /// <summary>验证码策略</summary>
     public CaptchaStrategyType CaptchaStrategy { get; set; } = CaptchaStrategyType.None;
 
+    /// <summary>是否启用 SSLKEYLOGFILE（浏览器/CEF 目标）</summary>
+    public bool UseSslKeyLog { get; set; }
+
     /// <summary>预期可提取率 (0-100)</summary>
     public int ExpectedCoverage { get; set; }
 

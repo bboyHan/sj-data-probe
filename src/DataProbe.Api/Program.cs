@@ -341,6 +341,15 @@ app.MapPost("/api/investigate/start", async (Microsoft.AspNetCore.Http.HttpReque
         // 存储 TargetProfile 供后续使用
         _sessionSnapshot.TargetRating = profile.ProtectionRating;
 
+        // SSLKEYLOGFILE（浏览器目标自动启用）
+        SslKeyLogService? keylog = null;
+        if (plan.UseSslKeyLog)
+        {
+            keylog = new SslKeyLogService();
+            keylog.EnableForProcess(ExtractProcessName(target));
+            Console.Error.WriteLine($"[Investigation] SSLKEYLOGFILE enabled for browser target");
+        }
+
         // 按执行计划启动通道，跳过启动失败的通道
         var startedChannels = new List<string>();
         foreach (var chName in plan.ChannelNames)
@@ -530,3 +539,11 @@ static CapturedDataType ParseDataType(string type) => type.ToLower() switch
     "access_token" => CapturedDataType.Token,
     _ => CapturedDataType.RawData
 };
+
+/// <summary>从目标输入中提取进程名（用于 SSLKEYLOGFILE 注入）</summary>
+static string ExtractProcessName(string target)
+{
+    if (target.StartsWith("http")) return "chrome";
+    if (target.Contains('.')) return "chrome";
+    return target.Replace(".exe", "").Trim();
+}

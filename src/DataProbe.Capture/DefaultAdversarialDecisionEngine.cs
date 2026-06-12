@@ -84,7 +84,10 @@ public class DefaultAdversarialDecisionEngine : IAdversarialDecisionEngine
         // 3. 仿真配置
         plan.TlsFingerprint = SelectTlsFingerprint(profile);
 
-        // 4. 验证码策略
+        // 4. SSLKEYLOGFILE（浏览器目标自动启用）
+        plan.UseSslKeyLog = profile.Type == TargetType.Website;
+
+        // 5. 验证码策略
         plan.CaptchaStrategy = profile.HasCaptcha ? CaptchaStrategyType.AutoOcr : CaptchaStrategyType.None;
 
         Log($"  方案: {plan.Summary}");

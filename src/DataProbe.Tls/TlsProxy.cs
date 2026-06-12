@@ -250,6 +250,8 @@ public class TlsProxy : IAsyncDisposable
     {
         var buffer = new byte[_config.TlsRelayBufferSize];
         var requestCapture = new RequestCapture();
+        var isWebSocket = false;            // WebSocket 模式标记
+        var wsFrames = new List<byte>();    // WebSocket 帧缓冲区
 
         // Client → Remote (requests) - also capture the first request for analysis
         var clientTask = Task.Run(async () =>
@@ -260,6 +262,23 @@ public class TlsProxy : IAsyncDisposable
                 {
                     var n = await client.ReadAsync(buffer, ct);
                     if (n == 0) break;
+
+                    // WebSocket 模式：解析 WS 帧，不回传给 HTTP 解析
+                    if (isWebSocket)
+                    {
+                        wsFrames.AddRange(buffer[..n]);
+                        var messages = DataProbe.Http.WebSocketParser.ExtractMessages(
+                            wsFrames.ToArray(), 0, "send");
+                        foreach (var msg in messages)
+                        {
+                            Console.Error.WriteLine($"[WS] Client → {sni}: {msg.Payload[..Math.Min(60, msg.Payload.Length)]}");
+                        }
+                        // 保留未完全解析的数据
+                        wsFrames.Clear();
+                        await remote.WriteAsync(buffer[..n], ct);
+                        await remote.FlushAsync(ct);
+                        continue;
+                    }
 
                     var requestData = buffer[..n];
                     // [DEBUG] 取消注释可查看实时请求流量
@@ -303,6 +322,41 @@ public class TlsProxy : IAsyncDisposable
                 {
                     var n = await remote.ReadAsync(buffer, ct);
                     if (n == 0) break;
+
+                    // ⭐ WebSocket 握手检测
+                    if (!isWebSocket && n >= 12)
+                    {
+                        var firstBytes = System.Text.Encoding.ASCII.GetString(buffer, 0, Math.Min(n, 100));
+                        if (firstBytes.Contains("101") && firstBytes.Contains("Switching") &&
+                            firstBytes.Contains("Upgrade", StringComparison.OrdinalIgnoreCase) &&
+                            firstBytes.Contains("websocket", StringComparison.OrdinalIgnoreCase))
+                        {
+                            isWebSocket = true;
+                            responseBuffer.Clear();
+                            Console.Error.WriteLine($"[TlsProxy] 🔄 WebSocket upgrade: {sni}");
+                            // 转发 101 响应给客户端
+                            await client.WriteAsync(buffer[..n], ct);
+                            await client.FlushAsync(ct);
+                            continue;
+                        }
+                    }
+
+                    // WebSocket 模式：解析帧
+                    if (isWebSocket)
+                    {
+                        // 将新数据追加到缓冲区，尝试解析帧
+                        responseBuffer.AddRange(buffer[..n]);
+                        var messages = DataProbe.Http.WebSocketParser.ExtractMessages(
+                            responseBuffer.ToArray(), 0, "receive");
+                        foreach (var msg in messages)
+                        {
+                            Console.Error.WriteLine($"[WS] Server → {sni}: {msg.Payload[..Math.Min(60, msg.Payload.Length)]}");
+                        }
+                        // 转发给客户端
+                        await client.WriteAsync(buffer[..n], ct);
+                        await client.FlushAsync(ct);
+                        continue;
+                    }
 
                     // Buffer the response for credential extraction
                     if (n > 0)
