@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 引用 DataProbe 核心库（编译后从输出目录获取） -->
+    <Reference Include="DataProbe.Core">
+      <HintPath>..\..\src\DataProbe.Api\bin\Debug\net8.0\DataProbe.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="DataProbe.Extractor">
+      <HintPath>..\..\src\DataProbe.Api\bin\Debug\net8.0\DataProbe.Extractor.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

@@ -157,6 +157,18 @@ public class RuleEngine : IRuleEngine, IDisposable
             }
         }
 
+        // 不解密情报提取（始终运行—不需要解密）
+        try
+        {
+            var passive = new PassiveIntelligence();
+            var passiveResults = passive.Analyze(session);
+            results.AddRange(passiveResults);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[RuleEngine] Passive intelligence error: {ex.Message}");
+        }
+
         return await Task.FromResult(results);
     }
 

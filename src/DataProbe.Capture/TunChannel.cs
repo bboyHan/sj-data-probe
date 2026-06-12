@@ -275,10 +275,137 @@ public class TunChannel : ICaptureChannel
         // TUN 中检测到 DNS 查询时转发事件
     }
 
+    /// <summary>
+    /// 从 QUIC Initial 包中提取 SNI (Server Name Indication)
+    /// QUIC Initial 包格式 (RFC 9000):
+    ///   Byte 0:   首字节 (0xC0 = Long Header, Initial)
+    ///   Bytes 1-4: Version
+    ///   Byte 5:   DCID Length
+    ///   Bytes 6-: DCID (长度由上一字段指定)
+    ///   ...       SCID, Token, Packet Number
+    ///   CRYPTO Frame (包含 TLS ClientHello)
+    /// </summary>
     private static void ExtractQuicSni(byte[] ipPacket, int length)
     {
-        // QUIC Initial Packet 中的 TLS ClientHello 包含 SNI
-        // 在后续 Phase 中实现完整 QUIC 检测
+        if (length < 50) return;
+
+        int pos = 0;
+
+        // 1) 跳过 UDP 头部 (8 字节)
+        // 在 TUN 中，IP 包包含完整的 IP+UDP 头
+        // 但这里收到的已经是 UDP payload (TUN 上层的处理)
+        // 对于 TUN 原始 IP 包：
+        int ipHeaderLen = (ipPacket[0] & 0x0F) * 4;
+        if (ipHeaderLen + 8 >= length) return;
+        pos = ipHeaderLen + 8; // 跳过 IP 头 + UDP 头
+
+        // 2) QUIC Long Header 检测
+        if (pos >= length) return;
+        byte firstByte = ipPacket[pos];
+        bool isLongHeader = (firstByte & 0x80) != 0;
+        if (!isLongHeader) return; // Short header = 1-RTT, 无 ClientHello
+
+        byte formType = (byte)((firstByte >> 4) & 0x07); // 高 3 位
+        if (formType != 0) return; // 0 = Initial
+
+        // 3) 跳过 Version (4 字节)
+        if (pos + 5 > length) return;
+        uint version = (uint)((ipPacket[pos + 1] << 24) | (ipPacket[pos + 2] << 16) |
+                              (ipPacket[pos + 3] << 8) | ipPacket[pos + 4]);
+        if (version == 0) return; // Version Negotiation
+        pos += 5;
+
+        // 4) DCID
+        if (pos >= length) return;
+        int dcidLen = ipPacket[pos]; pos++;
+        if (pos + dcidLen > length) return;
+        var dcid = new byte[dcidLen];
+        if (dcidLen > 0) Buffer.BlockCopy(ipPacket, pos, dcid, 0, dcidLen);
+        pos += dcidLen;
+
+        // 5) SCID
+        if (pos >= length) return;
+        int scidLen = ipPacket[pos]; pos++;
+        if (pos + scidLen > length) return;
+        pos += scidLen;
+
+        // 6) Token (for Initial packets)
+        if (pos + 2 > length) return;
+        int tokenLen = (ipPacket[pos] << 8) | ipPacket[pos + 1]; pos += 2;
+        if (pos + tokenLen > length) return;
+        pos += tokenLen;
+
+        // 7) Length (剩余包的长度)
+        if (pos + 2 > length) return;
+        int quicPayloadLen = (ipPacket[pos] << 8) | ipPacket[pos + 1]; pos += 2;
+
+        // 8) Packet Number (1-4 bytes, 通常为 1 或 2)
+        if (pos >= length) return;
+        int pnLen = ((firstByte >> 2) & 0x03) + 1; // 从首字节提取
+        if (pos + pnLen >= length) return;
+        pos += pnLen;
+
+        // 9) 查找 CRYPTO Frame (Type = 0x06)
+        // CRYPTO Frame: Type(1) + Offset(varint) + Length(varint) + Data
+        while (pos < length - 4)
+        {
+            byte frameType = ipPacket[pos]; pos++;
+            if (frameType == 0x06)
+            {
+                // CRYPTO Frame 找到
+                // Offset (varint)
+                if (pos >= length) break;
+                int varintLen = GetQuicVarintLength(ipPacket[pos]);
+                if (pos + varintLen > length) break;
+                var offset = ReadQuicVarint(ipPacket, pos, varintLen);
+                pos += varintLen;
+
+                // Length (varint)
+                if (pos >= length) break;
+                varintLen = GetQuicVarintLength(ipPacket[pos]);
+                if (pos + varintLen > length) break;
+                var cryptoLen = (int)ReadQuicVarint(ipPacket, pos, varintLen);
+                pos += varintLen;
+
+                // CRYPTO Data = TLS ClientHello
+                if (cryptoLen > 0 && pos + cryptoLen <= length)
+                {
+                    // 使用已有的 TLS SNI 提取逻辑
+                    var tlsData = new byte[cryptoLen];
+                    Buffer.BlockCopy(ipPacket, pos, tlsData, 0, cryptoLen);
+                    var sni = TlsHelper.ExtractSni(tlsData.AsSpan());
+                    if (!string.IsNullOrEmpty(sni))
+                    {
+                        Console.Error.WriteLine($"[TUN:QUIC] SNI: {sni}");
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    /// <summary>QUIC Varint 长度</summary>
+    private static int GetQuicVarintLength(byte firstByte)
+    {
+        return 1 << ((firstByte >> 6) & 0x03);
+    }
+
+    /// <summary>读取 QUIC Variable-Length Integer</summary>
+    private static ulong ReadQuicVarint(byte[] data, int pos, int len)
+    {
+        if (pos + len > data.Length) return 0;
+        return len switch
+        {
+            1 => (ulong)(data[pos] & 0x3F),
+            2 => (ulong)((data[pos] & 0x3F) << 8) | data[pos + 1],
+            4 => (ulong)((data[pos] & 0x3F) << 24) | (ulong)data[pos + 1] << 16 |
+                 (ulong)data[pos + 2] << 8 | data[pos + 3],
+            8 => (ulong)((data[pos] & 0x3F) << 56) | (ulong)data[pos + 1] << 48 |
+                 (ulong)data[pos + 2] << 40 | (ulong)data[pos + 3] << 32 |
+                 (ulong)data[pos + 4] << 24 | (ulong)data[pos + 5] << 16 |
+                 (ulong)data[pos + 6] << 8 | data[pos + 7],
+            _ => 0
+        };
     }
 
     /// <summary>简单 IP 校验和计算</summary>
