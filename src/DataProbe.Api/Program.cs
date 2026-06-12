@@ -643,20 +643,34 @@ app.MapPost("/api/decode", async (Microsoft.AspNetCore.Http.HttpRequest req) =>
         if (string.IsNullOrEmpty(raw))
             return Results.BadRequest(new { error = "no_data" });
 
-        var results = new Dictionary<string, object?> { ["original"] = raw.Length > 500 ? raw[..500] + "..." : raw };
+        var results = new Dictionary<string, object?>();
 
-        // 尝试 Base64 解码
-        try
+        // 尝试 Base64 解码（严格检测：长字符串 + 合法字符集）
+        if (raw.Length >= 16)
         {
-            var padding = 4 - raw.Length % 4;
-            if (padding != 4)
+            var validChars = raw.Count(c => char.IsLetterOrDigit(c) || c is '+' or '/' or '=');
+            var isValidBase64 = validChars >= raw.Length * 0.9 && raw.Length % 4 <= 1;
+            if (isValidBase64)
             {
-                var b64 = raw + new string('=', padding);
-                var decoded = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(b64));
-                results["base64"] = decoded.Length > 2000 ? decoded[..2000] + "..." : decoded;
+                try
+                {
+                    // 修复 padding
+                    var b64 = raw;
+                    var pad = (4 - b64.Length % 4) % 4;
+                    if (pad > 0) b64 += new string('=', pad);
+
+                    var decodedBytes = Convert.FromBase64String(b64);
+                    var decoded = System.Text.Encoding.UTF8.GetString(decodedBytes);
+                    // 只接受解码后可读的内容（至少有一定比例的 ASCII 可见字符）
+                    var readable = decoded.Count(c => c >= 0x20 && c <= 0x7e || c is '\n' or '\t');
+                    if (readable >= decoded.Length * 0.5)
+                    {
+                        results["base64"] = decoded;
+                    }
+                }
+                catch { }
             }
         }
-        catch { }
 
         // 尝试 URL 解码
         if (raw.Contains('%'))
@@ -664,7 +678,7 @@ app.MapPost("/api/decode", async (Microsoft.AspNetCore.Http.HttpRequest req) =>
             try
             {
                 var decoded = Uri.UnescapeDataString(raw);
-                if (decoded != raw) results["url_decoded"] = decoded.Length > 2000 ? decoded[..2000] + "..." : decoded;
+                if (decoded != raw) results["url_decoded"] = decoded;
             }
             catch { }
         }
@@ -675,12 +689,12 @@ app.MapPost("/api/decode", async (Microsoft.AspNetCore.Http.HttpRequest req) =>
             try
             {
                 var decoded = System.Text.Encoding.UTF8.GetString(Convert.FromHexString(raw));
-                results["hex"] = decoded.Length > 2000 ? decoded[..2000] + "..." : decoded;
+                results["hex"] = decoded;
             }
             catch { }
         }
 
-        // 尝试解析 JSON
+        // 尝试格式化 JSON
         try
         {
             using var doc = System.Text.Json.JsonDocument.Parse(raw);

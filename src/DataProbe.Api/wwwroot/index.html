@@ -513,7 +513,7 @@ function showTrafficDetail(idx) {
      <div style="margin-bottom:16px;background:#0d1117;border-radius:6px;padding:12px;overflow:auto;max-height:300px;font-size:12px"><pre style="white-space:pre-wrap;color:var(--text-secondary);font-family:var(--font-mono)" id="trafficResponseRaw">${esc(res)}</pre></div>
      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
        <div style="color:var(--accent-green);font-weight:600" id="decodeResultLabel">Response</div>
-       <button class="btn" onclick="decodeResponse(${idx})" style="font-size:11px">🔓 Decode</button>
+       <button class="btn" id="decodeBtn" onclick="decodeResponse(${idx})" style="font-size:11px">🔓 Decode</button>
      </div>
      <div style="background:#0d1117;border-radius:6px;padding:12px;overflow:auto;max-height:500px;font-size:12px"><pre style="white-space:pre-wrap;color:var(--text-secondary);font-family:var(--font-mono)" id="trafficDecodedResult">${esc(res)}</pre></div>`;
 }
@@ -521,8 +521,8 @@ function showTrafficDetail(idx) {
 async function decodeResponse(idx) {
   const item = _trafficItems[idx];
   if (!item || !item.response) return;
-  const btn = document.querySelector('#trafficModal .btn');
-  if (btn) btn.textContent = '⏳ Decoding...';
+  const btn = document.getElementById('decodeBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
   try {
     const result = await api('/api/decode', {
       method: 'POST',
@@ -532,14 +532,15 @@ async function decodeResponse(idx) {
     const decodings = result.decodings || {};
     const label = document.getElementById('decodeResultLabel');
     const display = document.getElementById('trafficDecodedResult');
-    // 显示所有解码结果
     let html = '';
     let found = false;
-    for (const [method, decoded] of Object.entries(decodings)) {
-      if (method === 'original') continue;
-      if (decoded && decoded !== decodings.original) {
-        html += `<div style="color:var(--accent-orange);font-size:10px;margin-bottom:4px">▼ ${method}</div>
-                 <div style="margin-bottom:12px">${esc(decoded)}</div>`;
+    // 按固定顺序显示解码结果
+    const order = ['base64','url_decoded','hex','json'];
+    for (const method of order) {
+      const decoded = decodings[method];
+      if (decoded && decoded !== item.response) {
+        html += `<div style="color:var(--accent-orange);font-size:10px;margin-bottom:4px;font-weight:600">▼ ${method}</div>
+                 <div style="margin-bottom:12px;background:#0d1117;border-radius:4px;padding:8px"><pre style="white-space:pre-wrap;color:var(--text-secondary);font-family:var(--font-mono);font-size:12px;margin:0">${esc(decoded)}</pre></div>`;
         found = true;
       }
     }
@@ -547,11 +548,11 @@ async function decodeResponse(idx) {
       display.innerHTML = html;
       label.textContent = '🔓 Decoded';
     } else {
-      display.innerHTML = esc(item.response);
+      display.innerHTML = `<pre style="white-space:pre-wrap;color:var(--text-secondary);font-family:var(--font-mono);font-size:12px;margin:0">${esc(item.response)}</pre>`;
       label.textContent = 'Response (no decoding matched)';
     }
   } catch(e) { toast(e.message,'error'); }
-  if (btn) btn.textContent = '🔓 Decode';
+  if (btn) { btn.disabled = false; btn.textContent = '🔓 Decode'; }
 }
 function closeTrafficModal() { document.getElementById('trafficModal').classList.remove('open'); }
 
