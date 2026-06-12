@@ -40,9 +40,10 @@ public class TlsProxyChannel : ICaptureChannel
     public TlsProxyChannel(DataProbeConfig config, CertificateManager certMgr,
         CredentialQueue credentialQueue, DataProbe.Extractor.RuleEngine? ruleEngine,
         DataProbe.Http.ProtocolRegistry? protocolRegistry = null,
-            DataProbe.Core.TrafficBuffer? trafficBuffer = null)
+            DataProbe.Core.TrafficBuffer? trafficBuffer = null,
+            DataProbe.Core.TlsFingerprint.TlsFingerprintEngine? fingerprintEngine = null)
     {
-        _proxy = new TlsProxy(config, certMgr, credentialQueue, ruleEngine, protocolRegistry, trafficBuffer);
+        _proxy = new TlsProxy(config, certMgr, credentialQueue, ruleEngine, protocolRegistry, trafficBuffer, fingerprintEngine);
     }
 
     public Task<bool> InitializeAsync()

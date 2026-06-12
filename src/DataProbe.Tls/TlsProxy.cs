@@ -28,6 +28,7 @@ public class TlsProxy : IAsyncDisposable
     private readonly DataProbe.Extractor.RuleEngine? _ruleEngine;
     private readonly DataProbe.Http.ProtocolRegistry? _protocolRegistry;
     private readonly DataProbe.Core.TrafficBuffer? _trafficBuffer;
+    private readonly DataProbe.Core.TlsFingerprint.TlsFingerprintEngine? _fingerprintEngine;
     private readonly TcpListener _listener;
     private TcpListener? _dnsListener;
     private Task? _dnsListenTask;
@@ -44,7 +45,8 @@ public class TlsProxy : IAsyncDisposable
                     CredentialQueue credentialQueue,
                     DataProbe.Extractor.RuleEngine? ruleEngine = null,
                     DataProbe.Http.ProtocolRegistry? protocolRegistry = null,
-            DataProbe.Core.TrafficBuffer? trafficBuffer = null)
+            DataProbe.Core.TrafficBuffer? trafficBuffer = null,
+            DataProbe.Core.TlsFingerprint.TlsFingerprintEngine? fingerprintEngine = null)
     {
         _config = config;
         _certMgr = certMgr;
@@ -52,6 +54,7 @@ public class TlsProxy : IAsyncDisposable
         _ruleEngine = ruleEngine;
             _protocolRegistry = protocolRegistry;
             _trafficBuffer = trafficBuffer;
+            _fingerprintEngine = fingerprintEngine;
         _listener = new TcpListener(IPAddress.Any, config.TlsProxyPort);
     }
 
@@ -192,9 +195,22 @@ public class TlsProxy : IAsyncDisposable
             // 2. Get the fake certificate for this domain
             var fakeCert = _certMgr.GetOrCreateCert(sni);
 
-            // 3. Connect to remote server
+            // 3. Connect to remote server (使用 TLS 指纹引擎，替代默认 SChannel)
             var remoteSocket = await DataProbe.Core.DnsResolver.ConnectAsync(sni, 443, ct);
             remoteStream = new NetworkStream(remoteSocket, ownsSocket: false);
+
+            // 如果启用了指纹引擎，用引擎创建上游 TLS 流
+            if (_fingerprintEngine != null && _fingerprintEngine.IsOpenSslAvailable)
+            {
+                remoteSsl = await _fingerprintEngine.CreateTlsStreamAsync(
+                    remoteStream, sni, _fingerprintEngine.ActiveProfile, ct);
+            }
+            else
+            {
+                // 默认 SChannel TLS（无指纹伪装）
+                remoteSsl = new SslStream(remoteStream, leaveInnerStreamOpen: true);
+                await remoteSsl.AuthenticateAsClientAsync(sni);
+            }
 
             // 4. TLS handshake with client (server mode) - using SChannel via SslStream
             clientSsl = new SslStream(clientStream, leaveInnerStreamOpen: true);
@@ -203,10 +219,6 @@ public class TlsProxy : IAsyncDisposable
                 clientCertificateRequired: false,
                 enabledSslProtocols: SslProtocols.Tls12 | SslProtocols.Tls13,
                 checkCertificateRevocation: false);
-
-            // 5. TLS handshake with remote (client mode)
-            remoteSsl = new SslStream(remoteStream, leaveInnerStreamOpen: true);
-            await remoteSsl.AuthenticateAsClientAsync(sni);
 
             // 6. Relay traffic in both directions
             await RelayTrafficAsync(clientSsl, remoteSsl, sni, ct);

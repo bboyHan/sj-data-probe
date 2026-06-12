@@ -92,7 +92,13 @@ var dnsSpoofCh = new DnsSpoofChannel();
 dnsSpoofCh.SetSpoofDomains(config.SpoofDomains);
 channelMgr.Register(dnsSpoofCh);
 
-var tlsProxyCh = new TlsProxyChannel(config, certMgr, credQueue, ruleEngine, protocolRegistry, trafficBuffer);
+var fingerprintEngine = new DataProbe.Core.TlsFingerprint.TlsFingerprintEngine();
+if (fingerprintEngine.IsOpenSslAvailable)
+{
+    fingerprintEngine.SelectProfile(config.TlsFingerprintProfile);
+    Console.Error.WriteLine($"[TlsFingerprint] Active: {fingerprintEngine.ActiveProfile?.Name}");
+}
+var tlsProxyCh = new TlsProxyChannel(config, certMgr, credQueue, ruleEngine, protocolRegistry, trafficBuffer, fingerprintEngine);
 channelMgr.Register(tlsProxyCh);
 
 // 系统代理通道（零权限，自动配置浏览器流量到 TlsProxy）
