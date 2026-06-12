@@ -107,17 +107,6 @@ public class RuleEngine : IRuleEngine, IDisposable
 
         var results = new List<DataEvidence>();
 
-        // 应用层解密流水线（退掉自定义编码/加密）
-        try
-        {
-            var decryptPipeline = new DataProbe.Core.DecryptionPipeline();
-            decryptPipeline.DecryptSession(session);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[RuleEngine] Decryption pipeline error: {ex.Message}");
-        }
-
         foreach (var rule in rules)
         {
             if (!rule.Enabled) continue;

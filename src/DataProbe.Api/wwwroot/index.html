@@ -506,14 +506,52 @@ function showTrafficDetail(idx) {
   if (!item) return;
   document.getElementById('trafficModal').classList.add('open');
   document.getElementById('trafficModalTitle').textContent = `${item.method||''} ${item.path||item.sni||''}`;
-  // 显示完整请求和响应数据，而不截断
   const req = item.request || '(empty)';
   const res = item.response || '(empty)';
   document.getElementById('trafficModalBody').innerHTML =
     `<div style="color:var(--accent-blue);margin-bottom:4px;font-weight:600">Request</div>
-     <div style="margin-bottom:16px;background:#0d1117;border-radius:6px;padding:12px;overflow:auto;max-height:300px;font-size:12px"><pre style="white-space:pre-wrap;color:var(--text-secondary);font-family:var(--font-mono)">${esc(req)}</pre></div>
-     <div style="color:var(--accent-green);margin-bottom:4px;font-weight:600">Response</div>
-     <div style="background:#0d1117;border-radius:6px;padding:12px;overflow:auto;max-height:500px;font-size:12px"><pre style="white-space:pre-wrap;color:var(--text-secondary);font-family:var(--font-mono)">${esc(res)}</pre></div>`;
+     <div style="margin-bottom:16px;background:#0d1117;border-radius:6px;padding:12px;overflow:auto;max-height:300px;font-size:12px"><pre style="white-space:pre-wrap;color:var(--text-secondary);font-family:var(--font-mono)" id="trafficResponseRaw">${esc(res)}</pre></div>
+     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+       <div style="color:var(--accent-green);font-weight:600" id="decodeResultLabel">Response</div>
+       <button class="btn" onclick="decodeResponse(${idx})" style="font-size:11px">🔓 Decode</button>
+     </div>
+     <div style="background:#0d1117;border-radius:6px;padding:12px;overflow:auto;max-height:500px;font-size:12px"><pre style="white-space:pre-wrap;color:var(--text-secondary);font-family:var(--font-mono)" id="trafficDecodedResult">${esc(res)}</pre></div>`;
+}
+
+async function decodeResponse(idx) {
+  const item = _trafficItems[idx];
+  if (!item || !item.response) return;
+  const btn = document.querySelector('#trafficModal .btn');
+  if (btn) btn.textContent = '⏳ Decoding...';
+  try {
+    const result = await api('/api/decode', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({data: item.response})
+    });
+    const decodings = result.decodings || {};
+    const label = document.getElementById('decodeResultLabel');
+    const display = document.getElementById('trafficDecodedResult');
+    // 显示所有解码结果
+    let html = '';
+    let found = false;
+    for (const [method, decoded] of Object.entries(decodings)) {
+      if (method === 'original') continue;
+      if (decoded && decoded !== decodings.original) {
+        html += `<div style="color:var(--accent-orange);font-size:10px;margin-bottom:4px">▼ ${method}</div>
+                 <div style="margin-bottom:12px">${esc(decoded)}</div>`;
+        found = true;
+      }
+    }
+    if (found) {
+      display.innerHTML = html;
+      label.textContent = '🔓 Decoded';
+    } else {
+      display.innerHTML = esc(item.response);
+      label.textContent = 'Response (no decoding matched)';
+    }
+  } catch(e) { toast(e.message,'error'); }
+  if (btn) btn.textContent = '🔓 Decode';
 }
 function closeTrafficModal() { document.getElementById('trafficModal').classList.remove('open'); }
 

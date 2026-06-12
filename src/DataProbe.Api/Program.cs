@@ -633,6 +633,69 @@ app.MapGet("/api/traffic", () =>
     });
 }).WithName("GetTrafficDetail").WithDescription("Pro Mode: Fiddler 风格流量查看器");
 
+// ── 解码 API ──
+app.MapPost("/api/decode", async (Microsoft.AspNetCore.Http.HttpRequest req) =>
+{
+    try
+    {
+        var body = await req.ReadFromJsonAsync<Dictionary<string, object>>();
+        var raw = body?.GetValueOrDefault("data", "")?.ToString() ?? "";
+        if (string.IsNullOrEmpty(raw))
+            return Results.BadRequest(new { error = "no_data" });
+
+        var results = new Dictionary<string, object?> { ["original"] = raw.Length > 500 ? raw[..500] + "..." : raw };
+
+        // 尝试 Base64 解码
+        try
+        {
+            var padding = 4 - raw.Length % 4;
+            if (padding != 4)
+            {
+                var b64 = raw + new string('=', padding);
+                var decoded = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(b64));
+                results["base64"] = decoded.Length > 2000 ? decoded[..2000] + "..." : decoded;
+            }
+        }
+        catch { }
+
+        // 尝试 URL 解码
+        if (raw.Contains('%'))
+        {
+            try
+            {
+                var decoded = Uri.UnescapeDataString(raw);
+                if (decoded != raw) results["url_decoded"] = decoded.Length > 2000 ? decoded[..2000] + "..." : decoded;
+            }
+            catch { }
+        }
+
+        // 尝试 Hex 解码
+        if (raw.Length >= 20 && raw.All(c => char.IsAsciiHexDigit(c)))
+        {
+            try
+            {
+                var decoded = System.Text.Encoding.UTF8.GetString(Convert.FromHexString(raw));
+                results["hex"] = decoded.Length > 2000 ? decoded[..2000] + "..." : decoded;
+            }
+            catch { }
+        }
+
+        // 尝试解析 JSON
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(raw);
+            results["json"] = System.Text.Json.JsonSerializer.Serialize(doc.RootElement, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch { }
+
+        return Results.Ok(new { decodings = results });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+}).WithName("DecodeData").WithDescription("尝试多种解码方式解码数据（Base64/URL/Hex/JSON）");
+
 // Export CA certificate
 app.MapGet("/cert", () =>
 {
