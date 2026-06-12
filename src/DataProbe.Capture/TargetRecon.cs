@@ -137,10 +137,9 @@ public class TargetRecon
                 result.Expires = cert.NotAfter;
                 result.IsValid = DateTime.UtcNow < cert.NotAfter;
 
-                // 检查是否由知名 CA 签发
-                var issuerName = cert.Issuer ?? "";
-                result.HasCertPinning = !issuerName.Contains("CA", StringComparison.OrdinalIgnoreCase)
-                                        && !issuerName.Contains("Trust", StringComparison.OrdinalIgnoreCase);
+                // 证书锁定无法通过 TLS 探测确定（需要逆向工程分析 APK/DLL）
+                // HasCertPinning 由 ReverseEngineering 扫描器设置，此处始终为 false
+                result.HasCertPinning = false;
             }
 
             return result;

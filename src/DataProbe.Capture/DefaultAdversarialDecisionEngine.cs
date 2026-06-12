@@ -165,10 +165,13 @@ public class DefaultAdversarialDecisionEngine : IAdversarialDecisionEngine
 
             case ProtectionLevel.Medium:
                 // 中等防护 → 内核拦截 + DNS + TLS MITM
+                // 同时包含 SystemProxy 作为非管理员回退
                 if (availableChannels.Contains("WinDivert"))
                     channels.Add("WinDivert");
                 if (availableChannels.Contains("DnsSpoof"))
                     channels.Add("DnsSpoof");
+                if (availableChannels.Contains("SystemProxy"))
+                    channels.Add("SystemProxy");
                 if (availableChannels.Contains("TlsProxy"))
                     channels.Add("TlsProxy");
                 break;

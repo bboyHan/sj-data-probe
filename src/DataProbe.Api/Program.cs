@@ -371,6 +371,15 @@ app.MapPost("/api/investigate/start", async (Microsoft.AspNetCore.Http.HttpReque
         };
         _sessionBuilder = new SessionBuilder(_sessionSnapshot);
 
+        // 提取目标域名 → 注入配置（使 TlsProxy 知道要解密什么）
+        var targetHost = ExtractHostname(target);
+        if (!string.IsNullOrEmpty(targetHost))
+        {
+            config.TargetDomains = new[] { targetHost };
+            packetFilter.SetTargetDomains(config.TargetDomains);
+            Console.Error.WriteLine($"[Investigation] Target domain set: {targetHost}");
+        }
+
         // ⭐ ADE 阶段 I: 目标洞察
         var profile = await ade.AnalyzeTargetAsync(target);
 
@@ -426,6 +435,26 @@ app.MapPost("/api/investigate/start", async (Microsoft.AspNetCore.Http.HttpReque
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"[ADE] Failed to start {chName}: {ex.Message}");
+            }
+        }
+
+        // 如果 SystemProxy 已启动但 TlsProxy 未启动，自动补上
+        if (startedChannels.Contains("SystemProxy") && !startedChannels.Contains("TlsProxy"))
+        {
+            var tlsCh = channelMgr.Get("TlsProxy");
+            if (tlsCh != null)
+            {
+                try
+                {
+                    await tlsCh.InitializeAsync();
+                    await tlsCh.StartAsync();
+                    startedChannels.Add("TlsProxy");
+                    Console.Error.WriteLine("[ADE] Auto-started TlsProxy (required by SystemProxy)");
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[ADE] Failed to auto-start TlsProxy: {ex.Message}");
+                }
             }
         }
 
@@ -664,4 +693,24 @@ static string ExtractProcessName(string target)
     if (target.StartsWith("http")) return "chrome";
     if (target.Contains('.')) return "chrome";
     return target.Replace(".exe", "").Trim();
+}
+
+/// <summary>从目标输入中提取主机名（用于 TargetDomains 配置）</summary>
+static string ExtractHostname(string target)
+{
+    try
+    {
+        // 如果是完整 URL → 提取主机名
+        if (target.StartsWith("http://") || target.StartsWith("https://"))
+            return new Uri(target).Host;
+        // 如果是域名或 IP → 直接返回
+        if (target.Contains('.') || char.IsDigit(target[0]))
+            return target;
+        // 否则是包名或进程名 → 无法确定域名
+        return "";
+    }
+    catch
+    {
+        return target;
+    }
 }

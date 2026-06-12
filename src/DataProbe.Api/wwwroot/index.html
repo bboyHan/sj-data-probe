@@ -8,19 +8,27 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;min-height:100vh}
 ::selection{background:#58a6ff44}
-
-/* ── Layout ── */
 .container{max-width:1100px;margin:0 auto;padding:20px}
-.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:8px}
+
+/* ── Header ── */
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px}
 .header h1{font-size:20px;font-weight:700}
 .header h1 span{color:#58a6ff}
-.header-right{display:flex;align-items:center;gap:12px}
+.header-right{display:flex;align-items:center;gap:8px}
 .status-badge{display:inline-flex;align-items:center;gap:6px;padding:3px 12px;border-radius:10px;font-size:12px;font-weight:500}
 .status-badge.idle{background:#161b22;color:#8b949e;border:1px solid #30363d}
 .status-badge.running{background:#0e4429;color:#3fb950;border:1px solid #238636}
 .status-badge.error{background:#3d1c1c;color:#f85149;border:1px solid #da3633}
 
-/* ── Input Section ── */
+/* ── Tabs ── */
+.tabs{display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid #30363d}
+.tab{padding:8px 18px;cursor:pointer;font-size:13px;font-weight:500;color:#8b949e;border-bottom:2px solid transparent;transition:all .2s}
+.tab:hover{color:#c9d1d9}
+.tab.active{color:#58a6ff;border-bottom-color:#58a6ff}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* ── Input (Easy Mode) ── */
 .input-section{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-bottom:16px}
 .input-row{display:flex;gap:10px;margin-bottom:12px}
 .input-row input{flex:1;padding:10px 14px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:14px;outline:none;transition:border .2s}
@@ -34,93 +42,96 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .btn-stop:hover{background:#f85149}
 .btn-secondary{background:#21262d;color:#c9d1d9;border:1px solid #30363d!important}
 .btn-secondary:hover{background:#30363d}
-
-.pack-selector{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.pack-selector{display:flex;gap:8px;flex-wrap:wrap}
 .pack-selector label{display:flex;align-items:center;gap:6px;padding:4px 12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;font-size:12px;cursor:pointer;transition:all .2s}
 .pack-selector label:hover{border-color:#58a6ff}
-.pack-selector input{accent-color:#3fb950}
 
-/* ── Cards ── */
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
-.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px}
+/* ── Stats Cards ── */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px}
 .card .label{font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
 .card .value{font-size:18px;font-weight:700}
 .card .value.green{color:#3fb950}
 .card .value.orange{color:#d29922}
 .card .value.blue{color:#58a6ff}
 .card .value.purple{color:#bc8cff}
-.card .value.red{color:#f85149}
 
-/* ── Plan Section ── */
+/* ── Planning Section ── */
 .plan-section{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:16px;display:none}
 .plan-section.visible{display:block}
 .plan-header{margin-bottom:12px}
-.plan-header h3{font-size:14px;color:#58a6ff;margin-bottom:4px}
-.plan-detail{font-size:13px;color:#8b949e}
 .plan-channels{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
 .channel-tag{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:500}
 .channel-tag.active{background:#0e4429;color:#3fb950;border:1px solid #238636}
 .channel-tag.inactive{background:#21262d;color:#8b949e;border:1px solid #30363d}
-.channel-tag.limited{background:#3d1c1c;color:#f85149;border:1px solid #da3633}
 .plan-limits{margin-top:8px}
 .plan-limits li{color:#f85149;font-size:12px;margin:2px 0;list-style:none}
-.plan-limits li::before{content:"⚠ ";color:#d29922}
 
-/* ── Results ── */
+/* ── Evidence ── */
 .section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px}
-.section-header h3{font-size:15px;font-weight:600}
 .evidence-group{margin-bottom:16px}
 .evidence-group h4{font-size:12px;color:#8b949e;margin-bottom:8px;display:flex;align-items:center;gap:6px}
 .evidence-group h4 .count{background:#21262d;padding:1px 7px;border-radius:8px;font-size:11px}
-
 .evidence-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px;margin-bottom:8px;transition:border-color .2s}
 .evidence-card:hover{border-color:#58a6ff}
-.evidence-row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
-.evidence-value{font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;font-size:13px;color:#3fb950;word-break:break-all;flex:1}
+.evidence-value{font-family:monospace;font-size:13px;color:#3fb950;word-break:break-all}
 .evidence-meta{font-size:11px;color:#8b949e;margin-top:6px;display:flex;gap:16px;flex-wrap:wrap}
-.evidence-meta span{display:flex;align-items:center;gap:4px}
-.evidence-actions{display:flex;gap:6px;flex-shrink:0}
 .btn-copy{padding:4px 10px;border:1px solid #30363d;border-radius:4px;font-size:11px;cursor:pointer;background:#21262d;color:#8b949e;transition:all .15s}
 .btn-copy:hover{background:#30363d;color:#c9d1d9}
-.btn-copy.copied{background:#0e4429;color:#3fb950;border-color:#238636}
+.btn-copy.copied{background:#0e4429;color:#3fb950}
 .type-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:10px;font-size:10px;font-weight:600}
 .type-badge.token{background:#2d1b4e;color:#bc8cff}
 .type-badge.payment{background:#3d1c1c;color:#f85149}
 .type-badge.url{background:#0e4429;color:#3fb950}
 .type-badge.key{background:#1c2d4e;color:#58a6ff}
-.type-badge.params{background:#2d2d1b;color:#d29922}
 .type-badge.raw{background:#1c1c1c;color:#8b949e}
-.confidence-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
-
-/* ── Empty State ── */
 .empty-state{text-align:center;padding:60px 20px;color:#484f58}
 .empty-state .icon{font-size:48px;margin-bottom:12px}
-.empty-state p{font-size:14px}
-.empty-state .hint{font-size:12px;color:#30363d;margin-top:8px}
+
+/* ── Pro Mode: Channel Panel ── */
+.channel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:20px}
+.channel-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px}
+.channel-name{font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px}
+.channel-desc{font-size:11px;color:#8b949e;margin:4px 0 8px}
+.channel-stat{font-size:11px;color:#8b949e;margin:2px 0}
+
+/* ── Pro Mode: Rule Table ── */
+.rule-table{width:100%;border-collapse:collapse;font-size:13px}
+.rule-table th{text-align:left;padding:8px 12px;border-bottom:2px solid #30363d;color:#8b949e;font-size:11px;font-weight:500}
+.rule-table td{padding:8px 12px;border-bottom:1px solid #21262d}
+.rule-table tr:hover td{background:#161b22}
+.rule-detail-panel{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-top:12px;display:none}
+.rule-detail-panel.visible{display:block}
+.rule-json{background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:12px;font-family:monospace;font-size:12px;white-space:pre-wrap;max-height:400px;overflow:auto}
+
+/* ── Pro Mode: Traffic Viewer ── */
+.traffic-table{width:100%;border-collapse:collapse;font-size:12px}
+.traffic-table th{text-align:left;padding:6px 10px;border-bottom:2px solid #30363d;color:#8b949e;font-size:10px;font-weight:500}
+.traffic-table td{padding:6px 10px;border-bottom:1px solid #21262d;font-family:monospace;font-size:11px}
+.traffic-table tr:hover td{background:#161b22}
+.traffic-detail{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-top:12px;display:none}
 
 /* ── Log ── */
-.log-section{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;margin-top:16px;max-height:200px;overflow-y:auto;display:none;font-family:'SFMono-Regular',Consolas,monospace;font-size:11px}
+.log-section{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;margin-top:16px;max-height:200px;overflow-y:auto;display:none;font-family:monospace;font-size:11px}
 .log-section.visible{display:block}
 .log-line{color:#8b949e;padding:2px 0;border-bottom:1px solid #21262d}
-.log-line:last-child{border-bottom:none}
 
-/* ── Responsive ── */
-@media(max-width:768px){
-  .input-row{flex-direction:column}
-  .input-row button{width:100%}
-  .evidence-row{flex-direction:column}
-  .evidence-actions{width:100%;justify-content:flex-end}
-}
+/* ── Toggle ── */
+.toggle{position:relative;display:inline-block;width:32px;height:18px;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .slider{position:absolute;inset:0;background:#30363d;border-radius:9px;transition:.2s}
+.toggle .slider::before{content:"";position:absolute;height:14px;width:14px;left:2px;bottom:2px;background:#c9d1d9;border-radius:50%;transition:.2s}
+.toggle input:checked+.slider{background:#238636}
+.toggle input:checked+.slider::before{transform:translateX(14px)}
 
-/* ── Animations ── */
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .running-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#3fb950;animation:pulse 1.5s infinite}
 </style>
 </head>
 <body>
-
 <div class="container">
-  <!-- Header -->
+
+  <!-- ── Header ── -->
   <div class="header">
     <h1>⚡ <span>DataProbe</span> <span style="font-weight:400;font-size:13px;color:#8b949e">数据开采对抗平台</span></h1>
     <div class="header-right">
@@ -130,61 +141,141 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     </div>
   </div>
 
-  <!-- Stats -->
-  <div class="cards" id="statsCards">
-    <div class="card"><div class="label">Session</div><div class="value blue" id="sessionId">-</div></div>
-    <div class="card"><div class="label">Protection</div><div class="value orange" id="protection">-</div></div>
-    <div class="card"><div class="label">Channels</div><div class="value purple" id="channels">0</div></div>
-    <div class="card"><div class="label">Evidence</div><div class="value green" id="evidenceCount">0</div></div>
-    <div class="card"><div class="label">Duration</div><div class="value" id="duration">00:00</div></div>
+  <!-- ── Tabs ── -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('easy',this)">🎯 调查</div>
+    <div class="tab" onclick="switchTab('rules',this)">📜 规则</div>
+    <div class="tab" onclick="switchTab('channels',this)">🔌 通道</div>
+    <div class="tab" onclick="switchTab('traffic',this)">📡 流量</div>
+    <div class="tab" onclick="switchTab('report',this)">📊 报告</div>
   </div>
 
-  <!-- Input -->
-  <div class="input-section">
-    <div class="input-row">
-      <input id="targetInput" type="text" placeholder="输入目标 — 域名 / URL / App 包名 / 文件路径" autofocus
-             onkeydown="if(event.key==='Enter')startInvestigation()">
-      <button id="btnStart" class="btn-start" onclick="startInvestigation()">▶ 开始调查</button>
-      <button id="btnStop" class="btn-stop" style="display:none" onclick="stopInvestigation()">■ 停止</button>
-    </div>
-    <div class="pack-selector">
-      <label><input type="checkbox" value="token" checked> 🔑 Token / 凭证</label>
-      <label><input type="checkbox" value="payment" checked> 💳 支付数据</label>
-      <label><input type="checkbox" value="api" checked> 📡 API 端点</label>
-      <label><input type="checkbox" value="heuristic" checked> 🤖 启发式发现</label>
-    </div>
-  </div>
+  <!-- ══════════════════════ TAB: 调查 ══════════════════════ -->
+  <div id="tab-easy" class="tab-content active">
 
-  <!-- Plan -->
-  <div class="plan-section" id="planSection">
-    <div class="plan-header">
-      <h3 id="planTitle">🛡️ 对抗方案</h3>
-      <div class="plan-detail" id="planDetail"></div>
+    <div class="cards" id="statsCards">
+      <div class="card"><div class="label">Target</div><div class="value blue" id="sTarget">-</div></div>
+      <div class="card"><div class="label">Protection</div><div class="value orange" id="sProtection">-</div></div>
+      <div class="card"><div class="label">Channels</div><div class="value purple" id="sChannels">0</div></div>
+      <div class="card"><div class="label">Evidence</div><div class="value green" id="sEvidence">0</div></div>
+      <div class="card"><div class="label">Duration</div><div class="value" id="sDuration">00:00</div></div>
     </div>
-    <div class="plan-channels" id="planChannels"></div>
-    <div id="planLimits"></div>
-  </div>
 
-  <!-- Results -->
-  <div id="resultsArea">
-    <div class="empty-state" id="emptyState">
-      <div class="icon">🔍</div>
-      <p>输入目标，点击「开始调查」</p>
-      <p class="hint">引擎将自动侦察目标防护 → 选择最优通道 → 提取结构化数据</p>
-    </div>
-    <div id="evidenceContainer" style="display:none">
-      <div class="section-header">
-        <h3>📦 提取结果</h3>
-        <button class="btn-secondary" onclick="clearResults()">🗑 清空</button>
+    <div class="input-section">
+      <div class="input-row">
+        <input id="targetInput" type="text" placeholder="目标 — 域名 / URL / 包名" autofocus onkeydown="if(event.key==='Enter')startInvestigation()">
+        <button id="btnStart" class="btn-start" onclick="startInvestigation()">▶ 开始调查</button>
+        <button id="btnStop" class="btn-stop" style="display:none" onclick="stopInvestigation()">■ 停止</button>
       </div>
-      <div id="evidenceGroups"></div>
+      <div class="pack-selector">
+        <label><input type="checkbox" value="token" checked> 🔑 Token</label>
+        <label><input type="checkbox" value="payment" checked> 💳 支付</label>
+        <label><input type="checkbox" value="api" checked> 📡 API</label>
+        <label><input type="checkbox" value="heuristic" checked> 🤖 启发式</label>
+      </div>
+    </div>
+
+    <div class="plan-section" id="planSection">
+      <div class="plan-header"><h3 id="planTitle">🛡️ 方案</h3></div>
+      <div class="plan-channels" id="planChannels"></div>
+      <div id="planLimits"></div>
+    </div>
+
+    <div id="resultsArea">
+      <div class="empty-state" id="emptyState">
+        <div class="icon">🔍</div><p>输入目标，按「开始调查」</p>
+      </div>
+      <div id="evidenceContainer" style="display:none">
+        <div class="section-header">
+          <h3>📦 提取结果</h3>
+          <button class="btn-secondary" onclick="clearEvidence()">🗑 清空</button>
+        </div>
+        <div id="evidenceGroups"></div>
+      </div>
     </div>
   </div>
 
-  <!-- Log -->
-  <div class="log-section" id="logSection">
-    <div id="logContent"></div>
+  <!-- ══════════════════════ TAB: 规则 ══════════════════════ -->
+  <div id="tab-rules" class="tab-content">
+
+    <div class="section-header">
+      <h3>📜 提取规则</h3>
+      <div>
+        <button class="btn-secondary" onclick="loadRules()">⟳ 刷新</button>
+        <button class="btn-secondary" onclick="showNewRuleForm()">+ 新建</button>
+      </div>
+    </div>
+
+    <div id="ruleList"><div class="empty-state"><p>加载中...</p></div></div>
+
+    <div class="rule-detail-panel" id="ruleDetailPanel">
+      <div class="section-header">
+        <h3 id="ruleDetailTitle">规则详情</h3>
+        <button class="btn-secondary" onclick="closeRuleDetail()">✕ 关闭</button>
+      </div>
+      <div id="ruleDetailBody"></div>
+    </div>
+
+    <div class="rule-detail-panel" id="ruleNewPanel">
+      <div class="section-header">
+        <h3>✏️ 新建规则</h3>
+        <button class="btn-secondary" onclick="closeNewRuleForm()">✕ 取消</button>
+      </div>
+      <div style="margin-bottom:8px">
+        <input id="newRuleName" placeholder="规则名称" style="padding:8px 12px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;width:100%;margin-bottom:8px;font-size:13px">
+        <textarea id="newRuleJson" rows="14" style="width:100%;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:12px;font-family:monospace;font-size:12px;resize:vertical">{
+  "name": "my_rule",
+  "description": "自定义提取规则",
+  "priority": 100,
+  "enabled": true,
+  "scan_locations": ["response.body","request.body","response.headers"],
+  "extractors": [
+    {"name":"my_data","source":"response_body","output_field":"value","data_type":"url","pattern":"\"key\":\"([^\"]+)\""}
+  ]
+}</textarea>
+      </div>
+      <button class="btn-start" onclick="saveNewRule()">💾 保存规则</button>
+    </div>
   </div>
+
+  <!-- ══════════════════════ TAB: 通道 ══════════════════════ -->
+  <div id="tab-channels" class="tab-content">
+    <div class="section-header">
+      <h3>🔌 通道状态</h3>
+      <button class="btn-secondary" onclick="loadChannels()">⟳ 刷新</button>
+    </div>
+    <div class="channel-grid" id="channelGrid"><div class="empty-state"><p>加载中...</p></div></div>
+  </div>
+
+  <!-- ══════════════════════ TAB: 流量 ══════════════════════ -->
+  <div id="tab-traffic" class="tab-content">
+    <div class="section-header">
+      <h3>📡 原始流量</h3>
+      <button class="btn-secondary" onclick="loadTraffic()">⟳ 刷新</button>
+    </div>
+    <div id="trafficList"><div class="empty-state"><p>加载中...</p></div></div>
+    <div class="traffic-detail" id="trafficDetailPanel">
+      <div class="section-header">
+        <h3 id="trafficDetailTitle">请求详情</h3>
+        <button class="btn-secondary" onclick="closeTrafficDetail()">✕ 关闭</button>
+      </div>
+      <div id="trafficDetailBody"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════ TAB: 报告 ══════════════════════ -->
+  <div id="tab-report" class="tab-content">
+    <div class="section-header"><h3>📊 报告导出</h3></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <a href="/api/report/json" target="_blank"><button class="btn-secondary">📄 导出 JSON</button></a>
+      <a href="/api/report/csv" target="_blank"><button class="btn-secondary">📊 导出 CSV</button></a>
+      <a href="/api/report/summary" target="_blank"><button class="btn-secondary">📝 摘要报告</button></a>
+      <a href="/api/evidence" target="_blank"><button class="btn-secondary">🔍 原始证据</button></a>
+    </div>
+  </div>
+
+  <!-- ── Log ── -->
+  <div class="log-section" id="logSection"><div id="logContent"></div></div>
 </div>
 
 <script>
@@ -193,248 +284,223 @@ let investigationId = null;
 let polling = null;
 let startTime = null;
 
-const TYPE_CONFIG = {
-  token:    { label: '🔑 Token',   cls: 'token',    icon: '🔑' },
-  payment:  { label: '💳 支付',    cls: 'payment',  icon: '💳' },
-  url:      { label: '🔗 URL',     cls: 'url',      icon: '🔗' },
-  key:      { label: '🔐 Key',     cls: 'key',      icon: '🔐' },
-  params:   { label: '📄 Params',  cls: 'params',   icon: '📄' },
-  raw:      { label: '📦 Raw',     cls: 'raw',      icon: '📦' },
-};
-
-// ── API ──
-async function api(url, opts) {
-  const r = await fetch(url, opts);
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
+// ── Tab ──
+function switchTab(tabId, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+tabId).classList.add('active');
+  if (tabId === 'rules') loadRules();
+  if (tabId === 'channels') loadChannels();
+  if (tabId === 'traffic') loadTraffic();
 }
 
-// ── Actions ──
+// ── API Helper ──
+async function api(url, opts) { const r = await fetch(url, opts); if (!r.ok) throw new Error(await r.text()); return r.json(); }
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ═══════════════════════════════ EASY MODE ═══════════════════════════════
+
 async function startInvestigation() {
   const target = document.getElementById('targetInput').value.trim();
   if (!target) { document.getElementById('targetInput').focus(); return; }
-
-  // Collect rule packs
-  const packs = [];
-  document.querySelectorAll('.pack-selector input:checked').forEach(cb => packs.push(cb.value));
-
-  setStatus('starting');
-  document.getElementById('btnStart').disabled = true;
+  setStatus('starting'); document.getElementById('btnStart').disabled = true;
   document.getElementById('btnStart').textContent = '⏳ 侦察中...';
-
   try {
-    const plan = packs.includes('heuristic')
-      ? {}
-      : {};
-
-    const res = await api('/api/investigate/start', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ target, packs })
-    });
-
-    investigationId = res.investigation_id;
-    startTime = Date.now();
-
-    // Show plan
-    showPlan(res);
-
-    // Update stats
-    document.getElementById('sessionId').textContent = res.investigation_id?.slice(-8) || 'active';
-    document.getElementById('protection').textContent = res.profile?.protection || 'N/A';
-    document.getElementById('channels').textContent = res.plan?.channels?.length || 0;
-
+    const res = await api('/api/investigate/start', { method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ target }) });
+    investigationId = res.investigation_id; startTime = Date.now();
+    document.getElementById('sTarget').textContent = target.slice(-20);
+    document.getElementById('sProtection').textContent = res.profile?.protection||'N/A';
+    document.getElementById('sChannels').textContent = (res.plan?.channels||[]).length;
+    const section = document.getElementById('planSection'); section.classList.add('visible');
+    document.getElementById('planTitle').textContent = '🛡️ '+(res.plan?.summary||'方案');
+    document.getElementById('planChannels').innerHTML = (res.plan?.channels||[]).map(ch =>
+      `<span class="channel-tag active">✅ ${esc(ch)}</span>`).join('');
+    const limits = document.getElementById('planLimits');
+    limits.innerHTML = (res.plan?.limitations||[]).length ?
+      '<ul class="plan-limits">'+res.plan.limitations.map(l=>`<li>⚠️ ${esc(l)}</li>`).join('')+'</ul>' : '';
     setStatus('running');
-    document.getElementById('btnStart').style.display = 'none';
-    document.getElementById('btnStop').style.display = '';
-
-    // Start polling
-    if (polling) clearInterval(polling);
-    polling = setInterval(pollResults, 3000);
-    pollResults();
-
+    document.getElementById('btnStart').style.display='none'; document.getElementById('btnStop').style.display='';
+    if (polling) clearInterval(polling); polling = setInterval(pollResults, 3000); pollResults();
     addLog(`✅ 调查启动: ${target}`);
-    addLog(`📋 方案: ${res.plan?.summary || 'N/A'}`);
-    addLog(`🔗 通道: ${(res.plan?.channels || []).join(' + ')}`);
-
-  } catch (e) {
-    setStatus('error');
-    addLog(`❌ 启动失败: ${e.message}`);
-    document.getElementById('btnStart').disabled = false;
-    document.getElementById('btnStart').textContent = '▶ 开始调查';
-  }
+    addLog(`📋 方案: ${res.plan?.summary||'N/A'}`);
+    addLog(`🔗 通道: ${(res.plan?.channels||[]).join(' + ')}`);
+  } catch(e) { setStatus('error'); addLog(`❌ ${e.message}`); document.getElementById('btnStart').disabled=false;
+    document.getElementById('btnStart').textContent='▶ 开始调查'; }
 }
 
 async function stopInvestigation() {
-  try {
-    await api('/api/investigate/stop', { method: 'POST' });
-    if (polling) { clearInterval(polling); polling = null; }
-    setStatus('idle');
-    document.getElementById('btnStart').style.display = '';
-    document.getElementById('btnStop').style.display = 'none';
-    document.getElementById('btnStart').disabled = false;
-    document.getElementById('btnStart').textContent = '▶ 开始调查';
-    addLog('⏹ 调查已停止');
-  } catch (e) {
-    addLog(`❌ 停止失败: ${e.message}`);
-  }
+  await api('/api/investigate/stop', {method:'POST'}).catch(()=>{});
+  if (polling) { clearInterval(polling); polling=null; }
+  setStatus('idle'); document.getElementById('btnStart').style.display='';
+  document.getElementById('btnStop').style.display='none'; document.getElementById('btnStart').disabled=false;
+  document.getElementById('btnStart').textContent='▶ 开始调查'; addLog('⏹ 已停止');
 }
 
 async function pollResults() {
   try {
-    const [session, evidence] = await Promise.all([
-      api('/api/session'),
-      api('/api/evidence')
-    ]);
-
-    // Duration
-    if (startTime) {
-      const sec = Math.floor((Date.now() - startTime) / 1000);
-      document.getElementById('duration').textContent =
-        String(Math.floor(sec/60)).padStart(2,'0') + ':' + String(sec%60).padStart(2,'0');
-    }
-
-    // Evidence count
-    document.getElementById('evidenceCount').textContent = evidence.total || 0;
-
-    if (evidence.items?.length > 0) {
-      renderEvidence(evidence.items);
-      document.getElementById('emptyState').style.display = 'none';
-      document.getElementById('evidenceContainer').style.display = 'block';
-    }
-
-  } catch (e) {
-    // Silently retry
-  }
-}
-
-function showPlan(res) {
-  const section = document.getElementById('planSection');
-  section.classList.add('visible');
-
-  document.getElementById('planTitle').textContent =
-    `🛡️ ${res.plan?.summary || '对抗方案'}`;
-
-  const detail = document.getElementById('planDetail');
-  detail.textContent = res.profile ?
-    `${res.target} — ${res.profile.ips?.length || 0} IPs, ${res.profile.cdn || 'no CDN'}, TLS ${res.profile.tls || 'N/A'}` : '';
-
-  const channelsDiv = document.getElementById('planChannels');
-  channelsDiv.innerHTML = (res.plan?.channels || []).map(ch =>
-    `<span class="channel-tag active">✅ ${ch}</span>`
-  ).join('');
-
-  const limitsDiv = document.getElementById('planLimits');
-  if (res.plan?.limitations?.length) {
-    limitsDiv.innerHTML = '<ul class="plan-limits">' +
-      res.plan.limitations.map(l => `<li>${l}</li>`).join('') + '</ul>';
-  } else {
-    limitsDiv.innerHTML = '';
-  }
+    const [session, evidence] = await Promise.all([api('/api/session'), api('/api/evidence')]);
+    if (startTime) { const s=Math.floor((Date.now()-startTime)/1000);
+      document.getElementById('sDuration').textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
+    document.getElementById('sEvidence').textContent=evidence.total||0;
+    if (evidence.items?.length) { renderEvidence(evidence.items);
+      document.getElementById('emptyState').style.display='none';
+      document.getElementById('evidenceContainer').style.display='block'; }
+  } catch(e) {}
 }
 
 function renderEvidence(items) {
-  // Group by type
   const groups = {};
-  items.forEach(item => {
-    const t = (item.type || 'raw').toLowerCase();
-    if (!groups[t]) groups[t] = [];
-    groups[t].push(item);
-  });
-
-  const container = document.getElementById('evidenceGroups');
-  container.innerHTML = '';
-
-  Object.entries(groups).forEach(([type, evs]) => {
-    const cfg = TYPE_CONFIG[type] || TYPE_CONFIG.raw;
-    const groupDiv = document.createElement('div');
-    groupDiv.className = 'evidence-group';
-
-    groupDiv.innerHTML = `<h4>${cfg.label} <span class="count">${evs.length}</span></h4>` +
-      evs.slice(0, 50).map(e => renderCard(e, cfg)).join('');
-
-    container.appendChild(groupDiv);
-  });
-}
-
-function renderCard(e, cfg) {
-  const value = e.value || '-';
-  const confidence = (e.confidence * 100).toFixed(0);
-  const confColor = confidence >= 90 ? '#3fb950' : confidence >= 70 ? '#d29922' : '#f85149';
-
-  return `<div class="evidence-card">
-    <div class="evidence-row">
-      <div style="flex:1">
-        <div><span class="type-badge ${cfg.cls}">${cfg.icon} ${cfg.label}</span></div>
-        <div class="evidence-value" style="margin-top:6px">${escHtml(value)}</div>
+  items.forEach(i => { const t=(i.type||'raw').toLowerCase(); if(!groups[t]) groups[t]=[]; groups[t].push(i); });
+  const container = document.getElementById('evidenceGroups'); container.innerHTML = '';
+  Object.entries(groups).forEach(([type,evs]) => {
+    const cfg = {token:{l:'🔑 Token',c:'token'},payment:{l:'💳 支付',c:'payment'},url:{l:'🔗 URL',c:'url'},key:{l:'🔐 Key',c:'key'},params:{l:'📄 Params',c:'params'},raw:{l:'📦 Raw',c:'raw'}}[type]||{l:'📦 '+type,c:'raw'};
+    const g = document.createElement('div'); g.className='evidence-group';
+    g.innerHTML = `<h4>${cfg.l} <span class="count">${evs.length}</span></h4>`+
+      evs.slice(0,30).map(e => `<div class="evidence-card">
+        <div class="evidence-value">${esc(e.value)}</div>
         <div class="evidence-meta">
-          <span>📍 ${e.location || '-'}</span>
-          <span>📌 ${e.rule || '-'}</span>
-          <span><span class="confidence-dot" style="background:${confColor}"></span>${confidence}%</span>
-          <span>⏱ ${e.captured_at ? new Date(e.captured_at).toLocaleTimeString() : '-'}</span>
+          <span>📍 ${e.location||'-'}</span>
+          <span>📌 ${e.rule||'-'}</span>
+          <span>🎯 ${Math.round((e.confidence||0)*100)}%</span>
+          <button class="btn-copy" onclick="copyValue(this,'${esc(e.value)}')">📋 复制</button>
         </div>
-      </div>
-      <div class="evidence-actions">
-        <button class="btn-copy" onclick="copyValue(this,'${escHtml(value)}')">📋 复制</button>
-      </div>
-    </div>
-  </div>`;
+      </div>`).join('');
+    container.appendChild(g);
+  });
 }
 
-function escHtml(s) {
-  if (!s) return '';
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-          .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+function clearEvidence() {
+  document.getElementById('evidenceGroups').innerHTML='';
+  document.getElementById('sEvidence').textContent='0';
+  document.getElementById('emptyState').style.display='block';
+  document.getElementById('evidenceContainer').style.display='none';
+}
+
+// ═══════════════════════════════ RULES ═══════════════════════════════
+
+async function loadRules() {
+  const container = document.getElementById('ruleList');
+  try {
+    const data = await api('/rules');
+    if (!data.rules?.length) { container.innerHTML='<div class="empty-state"><p>暂无规则</p></div>'; return; }
+    container.innerHTML = `<table class="rule-table"><thead><tr><th>启用</th><th>规则</th><th>优先级</th><th>提取器</th><th>匹配数</th><th>操作</th></tr></thead><tbody>${
+      data.rules.map(r => `<tr>
+        <td><label class="toggle"><input type="checkbox" ${r.enabled?'checked':''} onchange="toggleRule('${r.id}',this.checked)"><span class="slider"></span></label></td>
+        <td><a href="#" onclick="showRuleDetail('${r.id}');return false" style="color:#58a6ff">${esc(r.name)}</a></td>
+        <td>${r.priority}</td>
+        <td>${r.extractor_count}</td>
+        <td>${r.total_captured}</td>
+        <td><button class="btn-copy" onclick="deleteRule('${r.id}')">🗑</button></td>
+      </tr>`).join('')
+    }</tbody></table>`;
+  } catch(e) { container.innerHTML=`<div class="empty-state"><p>加载失败: ${e.message}</p></div>`; }
+}
+
+async function showRuleDetail(id) {
+  const panel = document.getElementById('ruleDetailPanel'); panel.classList.add('visible');
+  document.getElementById('ruleDetailTitle').textContent = `📜 规则: ${id}`;
+  try {
+    const data = await api('/rules');
+    const rule = data.rules.find(r => r.id===id);
+    document.getElementById('ruleDetailBody').innerHTML = rule ?
+      `<div class="rule-json">${esc(JSON.stringify(rule,null,2))}</div>` :
+      `<p style="color:#f85149">未找到规则</p>`;
+  } catch(e) { document.getElementById('ruleDetailBody').innerHTML=`<p style="color:#f85149">${e.message}</p>`; }
+}
+function closeRuleDetail() { document.getElementById('ruleDetailPanel').classList.remove('visible'); }
+
+async function toggleRule(id, enabled) {
+  addLog(`⚙️ ${enabled?'启用':'禁用'} 规则: ${id}`); /* API 暂不支持单条开关，通过日志记录 */ }
+
+async function deleteRule(id) {
+  if (!confirm(`确定删除规则 "${id}"？`)) return;
+  try { await api('/rules/'+id, {method:'DELETE'}); addLog(`🗑 已删除规则: ${id}`); loadRules(); }
+  catch(e) { addLog(`❌ 删除失败: ${e.message}`); }
+}
+
+function showNewRuleForm() { document.getElementById('ruleNewPanel').classList.add('visible'); }
+function closeNewRuleForm() { document.getElementById('ruleNewPanel').classList.remove('visible'); }
+
+async function saveNewRule() {
+  const name = document.getElementById('newRuleName').value.trim();
+  const json = document.getElementById('newRuleJson').value.trim();
+  if (!name) { addLog('❌ 请输入规则名称'); return; }
+  try {
+    const rule = JSON.parse(json); rule.name = name;
+    await api('/rules', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(rule)});
+    addLog(`✅ 规则已保存: ${name}`); closeNewRuleForm(); loadRules();
+  } catch(e) { addLog(`❌ 保存失败: ${e.message}`); }
+}
+
+// ═══════════════════════════════ CHANNELS ═══════════════════════════════
+
+async function loadChannels() {
+  const grid = document.getElementById('channelGrid');
+  try {
+    const data = await api('/api/channels');
+    grid.innerHTML = (data.channels||[]).map(c => `<div class="channel-card">
+      <div class="channel-name">${c.healthy?'🟢':'🔴'} ${esc(c.name)}</div>
+      <div class="channel-desc">${esc(c.description||'')}</div>
+      <div class="channel-stat">层级: ${c.layer||'-'} | 解密: ${c.decrypt?'✅':'❌'} | 需管理员: ${c.admin?'✅':'❌'}</div>
+      <div class="channel-stat">协议: ${(c.protocols||[]).join(', ')}</div>
+    </div>`).join('');
+  } catch(e) { grid.innerHTML=`<div class="empty-state"><p>加载失败</p></div>`; }
+}
+
+// ═══════════════════════════════ TRAFFIC ═══════════════════════════════
+
+async function loadTraffic() {
+  const container = document.getElementById('trafficList');
+  try {
+    const data = await api('/api/traffic');
+    if (!data.items?.length) { container.innerHTML='<div class="empty-state"><p>暂无流量记录</p></div>'; return; }
+    container.innerHTML = `<table class="traffic-table"><thead><tr>
+      <th>时间</th><th>方法</th><th>路径</th><th>状态</th></tr></thead><tbody>${
+      data.items.slice(0,50).map(i => `<tr onclick="showTrafficDetail(this,${esc(JSON.stringify(i)).replace(/"/g,'&quot;')})" style="cursor:pointer">
+        <td style="font-size:10px;color:#8b949e">${i.time?new Date(i.time).toLocaleTimeString():'-'}</td>
+        <td>${esc(i.method||'-')}</td>
+        <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis">${esc(i.path||'-')}</td>
+        <td>${i.status||'-'}</td>
+      </tr>`).join('')
+    }</tbody></table>`;
+  } catch(e) { container.innerHTML=`<div class="empty-state"><p>加载失败</p></div>`; }
+}
+function showTrafficDetail(row, item) {
+  const panel = document.getElementById('trafficDetailPanel'); panel.classList.add('visible');
+  document.getElementById('trafficDetailTitle').textContent = `📡 ${item.method||''} ${item.path||''}`;
+  document.getElementById('trafficDetailBody').innerHTML =
+    `<div style="margin-bottom:8px"><strong style="color:#58a6ff">请求体:</strong><pre style="background:#0d1117;padding:8px;border-radius:4px;margin-top:4px;font-size:11px;max-height:200px;overflow:auto">${esc(item.request||'-')}</pre></div>
+     <div><strong style="color:#3fb950">响应体:</strong><pre style="background:#0d1117;padding:8px;border-radius:4px;margin-top:4px;font-size:11px;max-height:300px;overflow:auto">${esc(item.response||'-')}</pre></div>`;
+  panel.scrollIntoView({behavior:'smooth'});
+}
+function closeTrafficDetail() { document.getElementById('trafficDetailPanel').classList.remove('visible'); }
+
+// ═══════════════════════════════ UTILS ═══════════════════════════════
+
+function setStatus(state) {
+  const b = document.getElementById('statusBadge');
+  const m = {idle:{c:'idle',t:'○ Idle'},starting:{c:'running',t:'⏳ Starting...'},
+    running:{c:'running',t:'<span class="running-dot"></span> Running'},error:{c:'error',t:'✕ Error'}};
+  const s=m[state]||m.idle; b.className='status-badge '+s.c; b.innerHTML=s.t;
 }
 
 function copyValue(btn, value) {
-  navigator.clipboard.writeText(value).then(() => {
-    btn.textContent = '✅ 已复制';
-    btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = '📋 复制'; btn.classList.remove('copied'); }, 2000);
-  });
+  navigator.clipboard.writeText(value).then(()=>{btn.textContent='✅ 已复制';btn.classList.add('copied');
+    setTimeout(()=>{btn.textContent='📋 复制';btn.classList.remove('copied')},2000);});
 }
 
-function clearResults() {
-  document.getElementById('evidenceGroups').innerHTML = '';
-  document.getElementById('evidenceCount').textContent = '0';
-  document.getElementById('emptyState').style.display = 'block';
-  document.getElementById('evidenceContainer').style.display = 'none';
-}
-
-// ── Status ──
-function setStatus(state) {
-  const badge = document.getElementById('statusBadge');
-  const STATUS_MAP = {
-    idle:    { cls: 'idle',    text: '○ Idle' },
-    starting:{ cls: 'running', text: '⏳ Starting...' },
-    running: { cls: 'running', text: '<span class="running-dot"></span> Running' },
-    error:   { cls: 'error',   text: '✕ Error' },
-  };
-  const s = STATUS_MAP[state] || STATUS_MAP.idle;
-  badge.className = 'status-badge ' + s.cls;
-  badge.innerHTML = s.text;
-}
-
-// ── Log ──
-let logVisible = false;
-function toggleLog() {
-  logVisible = !logVisible;
-  document.getElementById('logSection').classList.toggle('visible', logVisible);
-}
-
+let logVisible=false;
+function toggleLog() { logVisible=!logVisible; document.getElementById('logSection').classList.toggle('visible',logVisible); }
 function addLog(msg) {
-  const log = document.getElementById('logContent');
-  const line = document.createElement('div');
-  line.className = 'log-line';
-  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-  log.appendChild(line);
-  log.scrollTop = log.scrollHeight;
+  const log=document.getElementById('logContent'); const line=document.createElement('div'); line.className='log-line';
+  line.textContent=`[${new Date().toLocaleTimeString()}] ${msg}`; log.appendChild(line); log.scrollTop=log.scrollHeight;
 }
 
 // ── Init ──
-setStatus('idle');
-addLog('🟢 DataProbe 已就绪');
+setStatus('idle'); addLog('🟢 DataProbe 已就绪');
 </script>
 </body>
 </html>

@@ -78,10 +78,14 @@ public class CertificateManager : IDisposable
         serial[0] = (byte)(serial[0] & 0x7F); // Ensure positive
 
         var now = DateTimeOffset.UtcNow;
+        // 确保域名证书的 NotBefore 不早于 CA 证书的 NotBefore
+        var notBefore = now.AddMinutes(-5);
+        if (notBefore < _rootCa.NotBefore)
+            notBefore = _rootCa.NotBefore;
 
         var cert = certRequest.Create(
             _rootCa,
-            now.AddDays(-1),
+            notBefore,
             now.AddHours(_config.CertValidHours),
             serial);
 
