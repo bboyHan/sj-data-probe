@@ -48,7 +48,8 @@ public class ReAnalyzer
         // 2) 运行插件扫描器（按目标筛选）
         if (_pluginManager != null)
         {
-            var pluginScanners = _pluginManager.GetScannersFor(fileType, fileData);
+            var pluginScanners = _pluginManager.GetPlugins<IReScannerPlugin>()
+                .Where(s => s.CanAnalyze(fileType, fileData)).ToArray();
             foreach (var plugin in pluginScanners)
             {
                 try
