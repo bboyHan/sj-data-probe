@@ -1,4 +1,5 @@
 using DataProbe.Core;
+using DataProbe.Core.Plugin;
 
 namespace DataProbe.Capture;
 
@@ -87,6 +88,30 @@ public class ProcessHookChannel : ICaptureChannel
     /// <summary>Frida Hook 引擎（UseFrida=true 时使用）</summary>
     public FridaHookEngine? FridaEngine { get; set; }
 
+    /// <summary>插件管理器（用于查找 HookProvider 插件）</summary>
+    public DataProbe.Core.Plugin.PluginManager? PluginManager { get; set; }
+
+    private HookSession? _hookSession;
+
+    /// <summary>查找最适配当前目标的 HookProvider 插件</summary>
+    private IHookProviderPlugin? FindBestHookPlugin(string processName, int pid)
+    {
+        if (PluginManager == null) return null;
+        var plugins = PluginManager.GetPlugins<IHookProviderPlugin>();
+        return plugins.FirstOrDefault(p => p.CanHook(processName, pid));
+    }
+
+    /// <summary>获取目标进程 ID</summary>
+    private static int FindProcessId(string processName)
+    {
+        try
+        {
+            var procs = System.Diagnostics.Process.GetProcessesByName(processName);
+            return procs.FirstOrDefault()?.Id ?? 0;
+        }
+        catch { return 0; }
+    }
+
     public Task<bool> InitializeAsync()
     {
         _isInitialized = true;
@@ -106,6 +131,28 @@ public class ProcessHookChannel : ICaptureChannel
 
         try
         {
+            // 0) 检查 PluginManager 中有无特制的 HookProvider 插件
+            var targetPid = FindProcessId(_targetProcessName);
+            var hookPlugin = FindBestHookPlugin(_targetProcessName, targetPid);
+
+            if (hookPlugin != null)
+            {
+                // 插件提供定制的绕过方案（腾讯系 App 等强防目标）
+                Console.Error.WriteLine($"[ProcessHookChannel] Using HookProvider: {hookPlugin.Name}");
+                var session = await hookPlugin.InjectAsync(_targetProcessName, targetPid);
+                if (session?.IsActive == true)
+                {
+                    _hookSession = session;
+                    _isRunning = true;
+                    Console.Error.WriteLine($"[ProcessHookChannel] Plugin hook active on {_targetProcessName}");
+                    return;
+                }
+                else
+                {
+                    Console.Error.WriteLine($"[ProcessHookChannel] Plugin hook failed, falling back...");
+                }
+            }
+
             if (UseFrida)
             {
                 // Frida 模式 — 不需要 C++ 编译器
@@ -139,7 +186,19 @@ public class ProcessHookChannel : ICaptureChannel
 
         try
         {
-            if (UseFrida && FridaEngine != null)
+            if (_hookSession != null && PluginManager != null)
+            {
+                // 由插件发起的 Hook → 由插件清理
+                var plugin = PluginManager.GetPlugins<IHookProviderPlugin>()
+                    .FirstOrDefault(p => p.Id == _hookSession.PluginId);
+                if (plugin != null)
+                {
+                    await plugin.StopAsync(_hookSession);
+                    Console.Error.WriteLine($"[ProcessHookChannel] Plugin hook stopped: {plugin.Name}");
+                }
+                _hookSession = null;
+            }
+            else if (UseFrida && FridaEngine != null)
             {
                 await FridaEngine.StopAsync();
             }

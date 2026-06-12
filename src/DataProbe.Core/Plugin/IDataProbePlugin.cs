@@ -162,3 +162,50 @@ public interface IProtocolPlugin : IDataProbePlugin
     /// <summary>解析响应</summary>
     string? ParseResponse(ReadOnlySpan<byte> data);
 }
+
+// ═══════════════════════════════════════════════════════════
+// Hook 提供插件 — 针对特定目标的反检测绕过 + 注入方案
+// ═══════════════════════════════════════════════════════════
+
+/// <summary>
+/// Hook 提供插件 — 当目标有反 Frida/反 Hook 检测时，
+/// 由插件提供定制的绕过方案（改端口、改特征、Gadget 注入等）。
+///
+/// ProcessHookChannel 优先使用插件提供的方案，
+/// 只有无插件适配时才回退到通用 FridaEngine。
+/// </summary>
+public interface IHookProviderPlugin : IDataProbePlugin
+{
+    /// <summary>检测目标进程是否受此插件支持</summary>
+    bool CanHook(string processName, int processId);
+
+    /// <summary>检测目标是否有反 Hook 检测</summary>
+    HookProtectionLevel DetectProtection(string processName, int processId);
+
+    /// <summary>执行注入和 Hook，返回注入会话句柄</summary>
+    Task<HookSession?> InjectAsync(string processName, int processId, CancellationToken ct = default);
+
+    /// <summary>停止 Hook，清理注入痕迹</summary>
+    Task StopAsync(HookSession session, CancellationToken ct = default);
+}
+
+/// <summary>Hook 注入会话</summary>
+public class HookSession
+{
+    public string PluginId { get; set; } = "";
+    public string ProcessName { get; set; } = "";
+    public int ProcessId { get; set; }
+    public nint StateHandle { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>目标防护等级（由 HookProvider 检测后返回）</summary>
+public enum HookProtectionLevel
+{
+    None,       // 无防护，通用 Frida 可用
+    Light,      // 基本反调试，标准 Frida 可过
+    Moderate,   // Frida 特征检测，需定制端口/管道
+    Heavy,      // 主动扫描 + 闪退，需 Gadget 或内核隐藏
+    Extreme     // 硬件级 + 动态检测，极难绕过
+}
