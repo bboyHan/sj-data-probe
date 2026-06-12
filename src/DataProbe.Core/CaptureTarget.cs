@@ -169,17 +169,24 @@ public class FingerprintConfig
 /// </summary>
 public class DeviceProfile
 {
-    /// <summary>设备型号标识</summary>
     public string ModelId { get; set; } = "";
-
-    /// <summary>制造商</summary>
     public string Manufacturer { get; set; } = "";
-
-    /// <summary>操作系统</summary>
+    public string Brand { get; set; } = "";
     public string OS { get; set; } = "";
-
-    /// <summary>屏幕分辨率</summary>
+    public string Release { get; set; } = "";
     public string Resolution { get; set; } = "";
+    public int DensityDpi { get; set; }
+    public int Ttl { get; set; } = 64;
+    public string CpuArch { get; set; } = "arm64-v8a";
+    public string[] Sensors { get; set; } = Array.Empty<string>();
+
+    public DeviceProfile Clone() => new()
+    {
+        ModelId = ModelId, Manufacturer = Manufacturer, Brand = Brand,
+        OS = OS, Release = Release, Resolution = Resolution,
+        DensityDpi = DensityDpi, Ttl = Ttl, CpuArch = CpuArch,
+        Sensors = (string[])Sensors.Clone()
+    };
 }
 
 /// <summary>

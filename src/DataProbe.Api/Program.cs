@@ -1,6 +1,7 @@
 using System.Text.Json;
 using DataProbe.Capture;
 using DataProbe.Core;
+using DataProbe.Api;
 using DataProbe.Extractor;
 using DataProbe.Http;
 using DataProbe.Tls;
@@ -523,6 +524,85 @@ app.MapGet("/api/evidence", () =>
         })
     });
 }).WithName("GetEvidence").WithDescription("在当前 Session 上运行规则并返回提取结果");
+
+// ── Pro Mode API ──
+
+app.MapGet("/api/channels", () =>
+{
+    return Results.Ok(new
+    {
+        count = channelMgr.ChannelCount,
+        channels = channelMgr.AllStatus.Select(c => new
+        {
+            name = c.Name,
+            description = c.Description,
+            healthy = c.IsHealthy,
+            layer = c.Layer.ToString(),
+            decrypt = c.CanDecryptTls,
+            admin = c.RequiresAdmin,
+            protocols = c.SupportedProtocols,
+            scope = c.ScopeDescription
+        })
+    });
+}).WithName("GetChannels").WithDescription("Pro Mode: 查看所有通道的详细状态和能力");
+
+app.MapPost("/api/channels/{name}/restart", (string name) =>
+{
+    channelMgr.RestartAsync(name).GetAwaiter().GetResult();
+    return Results.Ok(new { status = "restarted", channel = name });
+}).WithName("RestartChannel").WithDescription("Pro Mode: 重启指定通道");
+
+app.MapGet("/api/report/json", () =>
+{
+    if (_sessionSnapshot.Steps.Count == 0)
+        return Results.Ok(new { error = "no_data" });
+
+    var evidences = ruleEngine.ProcessSessionAsync(_sessionSnapshot)
+        .GetAwaiter().GetResult();
+    var json = ReportGenerator.ToJson(_sessionSnapshot, evidences);
+    return Results.Content(json, "application/json");
+}).WithName("ExportJson").WithDescription("Pro Mode: 导出调查报告为 JSON");
+
+app.MapGet("/api/report/csv", () =>
+{
+    if (_sessionSnapshot.Steps.Count == 0)
+        return Results.Ok(new { error = "no_data" });
+
+    var evidences = ruleEngine.ProcessSessionAsync(_sessionSnapshot)
+        .GetAwaiter().GetResult();
+    var csv = ReportGenerator.ToCsv(evidences);
+    return Results.Content(csv, "text/csv");
+}).WithName("ExportCsv").WithDescription("Pro Mode: 导出证据为 CSV");
+
+app.MapGet("/api/report/summary", () =>
+{
+    if (_sessionSnapshot.Steps.Count == 0)
+        return Results.Ok(new { error = "no_data" });
+
+    var evidences = ruleEngine.ProcessSessionAsync(_sessionSnapshot)
+        .GetAwaiter().GetResult();
+    var summary = ReportGenerator.ToSummary(_sessionSnapshot, evidences);
+    return Results.Content(summary, "text/plain");
+}).WithName("ExportSummary").WithDescription("Pro Mode: 导出人类可读的调查摘要");
+
+app.MapGet("/api/traffic", () =>
+{
+    var all = trafficBuffer.GetAll();
+    return Results.Ok(new
+    {
+        total = all.Count,
+        items = all.Select(t => new
+        {
+            sni = t.Sni,
+            method = t.Method,
+            path = t.Path,
+            status = t.StatusCode,
+            request = t.RequestBody.Length > 200 ? t.RequestBody[..200] : t.RequestBody,
+            response = t.ResponseBody.Length > 500 ? t.ResponseBody[..500] : t.ResponseBody,
+            time = t.Timestamp
+        }).Take(200).ToList()
+    });
+}).WithName("GetTrafficDetail").WithDescription("Pro Mode: Fiddler 风格流量查看器");
 
 // Export CA certificate
 app.MapGet("/cert", () =>
