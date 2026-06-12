@@ -1,6 +1,6 @@
 # DataProbe (神机数探) — 项目状态
 
-> 最后更新: 2026-06-12
+> 最后更新: 2026-06-12 | 提交: `11bb298` | 5 commits ahead of v1.0
 > 设计文档: [DESIGN.md](./DESIGN.md)
 
 ## 项目定位
@@ -46,36 +46,53 @@
 12. 不解密情报提取               — 大小/时序/SNI 分析
 ```
 
-## 当前代码状态
+## 当前代码状态（v2.0）
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
-| ICaptureChannel + 3 通道 | ✅ | 基础通道架构完成，需扩展 |
-| TlsProxy (SChannel MITM) | ✅ | 需 OpenSSL 替换实现指纹伪造 |
-| HTTP/1.1 解析 | ✅ | 需完善 chunked/keep-alive |
-| HTTP/2 解析 | ❌ 仅检测 | 需 nghttp2 P/Invoke 实现 |
-| 规则引擎 | ⚠️ 基础版 | 需重写为 Session 级 + 全位置 |
-| SessionSnapshot | ❌ | 全新核心模型，未实现 |
-| 逆向工程中心 | ❌ | 全新模块 |
-| 仿真模拟层 | ❌ | 全新模块 |
-| 验证对抗引擎 | ❌ | 全新模块 |
-| 反作弊感知 | ❌ | 全新模块 |
-| Easy Mode UI | ❌ | 全新（现有 Dashboard 简陋） |
+| 核心数据模型 | ✅ 完成 | SessionSnapshot / DataEvidence / CaptureTarget / SessionBuilder |
+| ICaptureChannel + 4 通道 | ✅ 完成 | WinDivert / DnsSpoof / TlsProxy / SystemProxy（4 通道） |
+| TUN 通道 | 🔧 骨架 | TunChannel.cs 分类器完整，缺 WinTUN P/Invoke |
+| 进程 Hook | 🔧 骨架 | ProcessHookChannel.cs 架构完整，缺 C++ DLL + 注入 |
+| HTTP/1.1 解析 | ✅ 已清理 | 移除支付命名残余 |
+| HTTP/2 + HPACK | ✅ 完整实现 | nghttp2 帧解析 + Huffman 解码 + 静态/动态表 |
+| WebSocket 解析 | ✅ 完整实现 | RFC 6455 帧解析 + TlsProxy 集成 |
+| SSLKEYLOGFILE | ✅ 新增 | 浏览器密钥注入 + 文件监控 + NSS 导出 |
+| 规则引擎 | ✅ Session 级 | 全位置扫描 + 热加载 + 启发式提取集成 |
+| 启发式提取 | ✅ V1 | 熵检测 / JSON 字段 / JWT 解码 |
+| 验证码检测 | ✅ 实现 | 极验/reCAPTCHA/hCaptcha/自定义类型识别 |
+| 验证码求解 | 🔧 骨架 | 缺 ddddocr/2Captcha API 实际调用 |
+| 逆向工程 V1 | ✅ 实现 | 字符串扫描 / SDK 指纹 / 证书锁定 / 反模拟器检测 |
+| 逆向工程 V2 | 🔧 骨架 | APK 解包 / PE 导入表 / 加密常数分析（未实装） |
+| 反作弊检测 | ✅ V1 | ACE/TenSafe/EAC/BattlEye 模块扫描 |
+| 仿真模拟 | ❌ 未开始 | TLS 指纹伪造 / 设备仿真 / 行为仿真 |
+| ADE V1 | ✅ 完成 | 目标侦察(DNS/TLS/CDN) + 通道选择 + 自动降级 |
+| 插件体系 | ✅ 完成 | PluginManager 全产品扩展入口 + 5 类插件接口 |
+| Easy Mode Dashboard | ✅ 全新 | 目标输入 / ADE 方案 / 证据卡片 / 3s 轮询 |
+| Pro Mode | ❌ 未开始 | 通道面板 / 规则编辑器 / 流量查看器 |
+| 报告系统 | ❌ 未开始 | 证据链导出 / PDF/JSON/CSV |
 
-## 紧急修复项
+## 紧急修复项（已完成 ✅）
 
-1. `/status` 永远返回 "running" — `true ? "running" : "stopped"` 硬编码
-2. `config.json` 反序列化结果未赋值 — `JsonSerializer.Deserialize<DataProbeConfig>(json)` 行
-3. RuleEngine Source 硬编码 "oracle"
-4. ParseDataType 残留支付枚举名映射
+| 修复项 | 状态 |
+|--------|------|
+| `/status` 硬编码 bug | ✅ 已修复 |
+| `config.json` 反序列化未赋值 | ✅ 已修复 |
+| RuleEngine Source 硬编码 "oracle" | ✅ 已移除 |
+| ParseDataType 残留支付枚举名 | ✅ 已清理 |
+| CapturedDataType 扩展 | ✅ 新增 Account/Payment |
+| HttpParser 支付命名 | ✅ 已清理 |
+| Tls 项目缺少引用 | ✅ 已修复 |
+| MatchType 命名空间冲突 | ✅ 已修复 |
 
-## 实施路线
+## 实施路线（更新）
 
-| 版本 | 时间 | 核心交付 |
-|------|------|----------|
-| V1.1 | 6-8 周 | HTTP/2 解析、Session 模型、全位置扫描、系统代理通道 |
-| V1.5 | 10-12 周 | 进程 SSL Hook、逆向工程、TUN 通道、WebSocket |
-| V2.0 | 12-16 周 | TLS 指纹伪造、设备仿真、反作弊感知、验证对抗、报告系统 |
+| 版本 | 当前状态 | 剩余工作 |
+|------|----------|----------|
+| V1.1 — 基础可用 | ✅ 100% | HTTP/2 / Session 模型 / 全位置扫描 / 系统代理 |
+| V1.5 — 能力扩展 | 完成 40% | ✅ WebSocket / SSLKEYLOGFILE / 反作弊 / 启发式 |
+| | | 🔧 进程 Hook / TUN / 逆向 V2 / 验证码求解 |
+| V2.0 — 完全体 | 0% | TLS 指纹伪造 / 仿真 / 报告 / Pro Mode |
 
 ## 快速链接
 
