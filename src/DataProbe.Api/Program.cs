@@ -763,6 +763,39 @@ app.MapGet("/api/llm/status", () =>
     catch { return Results.Ok(new { ollama = false, template_engine = true }); }
 }).WithName("LlmStatus").WithDescription("检查 AI 规则生成器状态");
 
+// ── 被动 TLS 解密 ──
+var _passiveTls = new DataProbe.Core.TlsFingerprint.PassiveTlsDecryptor();
+var _etwCapture = new DataProbe.Capture.EtwTlsCaptureService();
+if (_etwCapture.IsAvailable)
+{
+    _passiveTls.RegisterKeyProvider(_etwCapture);
+    _ = _etwCapture.StartAsync();
+    Console.Error.WriteLine("[PassiveTLS] ETW capture started");
+}
+else
+{
+    Console.Error.WriteLine("[PassiveTLS] ETW not available (requires admin)");
+}
+
+app.MapGet("/api/passive-tls/status", () =>
+{
+    var stats = _passiveTls.GetStats();
+    return Results.Ok(new
+    {
+        etw_available = _etwCapture.IsAvailable,
+        etw_running = _etwCapture.IsRunning,
+        keys_captured = stats.KeyCount,
+        decrypted = stats.DecryptedSessions,
+        providers = stats.ProviderNames
+    });
+}).WithName("PassiveTlsStatus").WithDescription("被动 TLS 解密状态");
+
+app.MapGet("/api/passive-tls/keylog", () =>
+{
+    var keylog = _passiveTls.ExportToNssKeylog();
+    return Results.Content(keylog, "text/plain");
+}).WithName("ExportKeyLog").WithDescription("导出 NSS KeyLog 格式（可被 Wireshark 使用）");
+
 // Export CA certificate
 app.MapGet("/cert", () =>
 {
