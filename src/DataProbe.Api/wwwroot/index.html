@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DataProbe - Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;padding:20px;min-width:900px}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.header h1{font-size:22px;font-weight:700}
+.header h1 span{color:#58a6ff}
+.status-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 14px;border-radius:12px;font-size:13px;font-weight:500}
+.status-badge.running{background:#0e4429;color:#3fb950}
+.status-badge.stopped{background:#3d1c1c;color:#f85149}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px}
+.card .label{font-size:11px;color:#8b949e;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+.card .value{font-size:22px;font-weight:700}
+.card .value.green{color:#3fb950}
+.card .value.orange{color:#d29922}
+.card .value.blue{color:#58a6ff}
+.card .value.purple{color:#bc8cff}
+.controls{display:flex;gap:8px;margin-bottom:20px}
+.controls button{padding:7px 18px;border:1px solid #30363d;border-radius:6px;font-size:13px;cursor:pointer;background:#21262d;color:#c9d1d9;transition:all .15s}
+.controls button:hover{background:#30363d}
+.controls button.primary{background:#238636;border-color:#238636;color:#fff}
+.controls button.primary:hover{background:#2ea043}
+.controls button.danger{background:#da3633;border-color:#da3633;color:#fff}
+.controls button.danger:hover{background:#f85149}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 12px;border-bottom:2px solid #30363d;color:#8b949e;font-weight:500;font-size:11px;text-transform:uppercase}
+td{padding:8px 12px;border-bottom:1px solid #21262d;font-family:'SFMono-Regular',Consolas,monospace;font-size:12px}
+tr:hover td{background:#161b22}
+.empty{text-align:center;padding:40px;color:#8b949e;font-size:13px}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>⚡ <span>DataProbe</span></h1>
+  <span id="statusBadge" class="status-badge stopped">Loading...</span>
+</div>
+<div class="cards" id="statsCards">
+  <div class="card"><div class="label">Uptime</div><div class="value blue" id="uptime">-</div></div>
+  <div class="card"><div class="label">Captured</div><div class="value green" id="credTotal">0</div></div>
+  <div class="card"><div class="label">Sent</div><div class="value orange" id="credSent">0/0</div></div>
+  <div class="card"><div class="label">TLS Sessions</div><div class="value purple" id="tlsSessions">0</div></div>
+  <div class="card"><div class="label">DNS Spoofed</div><div class="value orange" id="dnsSpoofed">0</div></div>
+  <div class="card"><div class="label">Connections</div><div class="value" id="activeConns">0</div></div>
+</div>
+<div class="controls">
+  <button id="btnStart" class="primary" onclick="doAction('start')">▶ Start</button>
+  <button id="btnStop" class="danger" onclick="doAction('stop')">■ Stop</button>
+  <button onclick="window.open('/api/docs')">📖 Swagger</button>
+  <button onclick="window.open('/cert')">📜 CA Cert</button>
+  <button onclick="location.reload()">⟳ Refresh</button>
+</div>
+<table><thead><tr><th>Time</th><th>Source</th><th>Type</th><th>Value</th></tr></thead><tbody id="dataBody"></tbody></table>
+<div class="empty" id="dataEmpty">No data captured yet</div>
+<script>
+async function fetchJSON(u){const r=await fetch(u);if(!r.ok)throw new Error();return r.json()}
+async function doAction(a){try{await fetch('/'+a,{method:'POST'});await refresh()}catch(e){}}
+function fmtTime(s){if(!s)return'-';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),s2=Math.floor(s%60);return h>0?h+'h '+m+'m':m>0?m+'m '+s2+'s':s2+'s'}
+function esc(s){return(!s)?'-':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+async function refresh(){
+  try{
+    const s=await fetchJSON('/status');
+    const b=document.getElementById('statusBadge');b.className='status-badge '+(s.status==='running'?'running':'stopped');b.textContent=s.status;
+    document.getElementById('uptime').textContent=fmtTime(s.uptime_seconds);
+    document.getElementById('credTotal').textContent=s.credentials_queued||0;
+    document.getElementById('credSent').textContent=(s.credentials_sent||0)+'/'+(s.credentials_failed||0);
+    document.getElementById('tlsSessions').textContent=s.active_tls_sessions||0;
+    document.getElementById('dnsSpoofed').textContent=s.dns_spoofed||0;
+    document.getElementById('activeConns').textContent=s.active_connections||0;
+    document.getElementById('btnStart').style.display=s.status==='running'?'none':'';
+    document.getElementById('btnStop').style.display=s.status==='running'?'':'none';
+  }catch(e){}
+  try{
+    const d=await fetchJSON('/data');const tb=document.getElementById('dataBody'),em=document.getElementById('dataEmpty');tb.innerHTML='';
+    if(d.items&&d.items.length>0){em.style.display='none';d.items.slice().reverse().forEach(i=>{const v=i.value||'';tb.innerHTML+='<tr><td style="font-size:11px;color:#8b949e">'+esc(i.captured_at?new Date(i.captured_at).toLocaleString():'-')+'</td><td style="font-size:11px">'+esc(i.source||'-')+'</td><td style="font-size:11px;color:#58a6ff">'+esc(i.type||'-')+'</td><td class="url-cell" style="max-width:500px;overflow:hidden;text-overflow:ellipsis" title="'+esc(v)+'"><span style="color:#3fb950">'+esc(v.substring(0,120))+'</span></td></tr>'})}else{em.style.display='block'}
+  }catch(e){}
+}
+refresh();setInterval(refresh,3000);
+</script>
+</body>
+</html>

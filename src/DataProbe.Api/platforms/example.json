@@ -1,0 +1,14 @@
+{
+  "name": "example",
+  "description": "示例规则 — 匹配 example.com 的 /api/data 路径，提取 JSON 响应中的目标字段",
+  "priority": 100,
+  "enabled": true,
+  "matchers": [
+    {"field": "domain", "operator": "contains", "value": "example.com"},
+    {"field": "path", "operator": "regex", "value": "/api/data"}
+  ],
+  "extractors": [
+    {"name": "target_field", "source": "response_body",
+     "pattern": "\"target\"\\s*:\\s*\"([^\"]+)\"", "output_field": "value", "data_type": "url"}
+  ]
+}

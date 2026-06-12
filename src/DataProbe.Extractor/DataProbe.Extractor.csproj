@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>DataProbe.Extractor</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DataProbe.Core\DataProbe.Core.csproj" />
+    <ProjectReference Include="..\DataProbe.Http\DataProbe.Http.csproj" />
+  </ItemGroup>
+</Project>
