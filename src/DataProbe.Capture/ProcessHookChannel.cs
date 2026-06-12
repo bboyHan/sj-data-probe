@@ -81,6 +81,12 @@ public class ProcessHookChannel : ICaptureChannel
     /// <summary>IPC 管道名称</summary>
     public string PipeName { get; set; } = "DataProbeHookPipe";
 
+    /// <summary>使用 Frida 替代原生 DLL 注入（不需要 C++ 编译器）</summary>
+    public bool UseFrida { get; set; } = true;
+
+    /// <summary>Frida Hook 引擎（UseFrida=true 时使用）</summary>
+    public FridaHookEngine? FridaEngine { get; set; }
+
     public Task<bool> InitializeAsync()
     {
         _isInitialized = true;
@@ -88,31 +94,36 @@ public class ProcessHookChannel : ICaptureChannel
         return Task.FromResult(true);
     }
 
-    public Task StartAsync()
+    public async Task StartAsync()
     {
-        if (_isRunning) return Task.CompletedTask;
+        if (_isRunning) return;
 
         if (string.IsNullOrEmpty(_targetProcessName))
         {
             Console.Error.WriteLine("[ProcessHookChannel] No target process specified");
-            return Task.CompletedTask;
+            return;
         }
 
         try
         {
-            // Phase 4 完整实现：
-            // 1. 查找目标进程 (Process.GetProcessesByName)
-            // 2. 检测进程位数 (32/64)
-            // 3. 选择对应架构的 hook.dll
-            // 4. CreateRemoteThread → LoadLibrary(hook.dll)
-            // 5. hook.dll 内部:
-            //    a. MinHook 初始化
-            //    b. 扫描导入表定位 SSL_write/SSL_read
-            //    c. Hook 安装
-            //    d. 建立 NamedPipe 连接
-            // 6. 开始接收 IPC 数据
+            if (UseFrida)
+            {
+                // Frida 模式 — 不需要 C++ 编译器
+                FridaEngine = new FridaHookEngine();
+                var injected = await FridaEngine.InjectAsync(_targetProcessName, PipeName);
+                if (!injected)
+                {
+                    Console.Error.WriteLine("[ProcessHookChannel] Frida injection failed");
+                    return;
+                }
+                FridaEngine.OnTransactionCaptured += tx => OnTransactionCaptured?.Invoke(tx);
+            }
+            else
+            {
+                // 原生 DLL 注入模式 — 需要 hook.dll（C++ 编译）
+                StartHookSession();
+            }
 
-            StartHookSession();
             _isRunning = true;
             Console.Error.WriteLine($"[ProcessHookChannel] Hook started on {_targetProcessName}");
         }
@@ -120,21 +131,23 @@ public class ProcessHookChannel : ICaptureChannel
         {
             Console.Error.WriteLine($"[ProcessHookChannel] Start failed: {ex.Message}");
         }
-
-        return Task.CompletedTask;
     }
 
-    public Task StopAsync()
+    public async Task StopAsync()
     {
-        if (!_isRunning) return Task.CompletedTask;
+        if (!_isRunning) return;
 
         try
         {
-            // Phase 4 完整实现：
-            // 1. 发送 IPC 关闭信号到 hook.dll
-            // 2. 等待 hook.dll 卸载 (FreeLibrary)
-            // 3. 关闭管道连接
-            StopHookSession();
+            if (UseFrida && FridaEngine != null)
+            {
+                await FridaEngine.StopAsync();
+            }
+            else
+            {
+                StopHookSession();
+            }
+
             _isRunning = false;
             Console.Error.WriteLine("[ProcessHookChannel] Stopped");
         }
@@ -142,8 +155,6 @@ public class ProcessHookChannel : ICaptureChannel
         {
             Console.Error.WriteLine($"[ProcessHookChannel] Stop error: {ex.Message}");
         }
-
-        return Task.CompletedTask;
     }
 
     /// <summary>
