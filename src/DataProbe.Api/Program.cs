@@ -626,8 +626,8 @@ app.MapGet("/api/traffic", () =>
             method = t.Method,
             path = t.Path,
             status = t.StatusCode,
-            request = t.RequestBody.Length > 200 ? t.RequestBody[..200] : t.RequestBody,
-            response = t.ResponseBody.Length > 500 ? t.ResponseBody[..500] : t.ResponseBody,
+            request = t.RequestBody.Length > 5000 ? t.RequestBody[..5000] : t.RequestBody,
+            response = t.ResponseBody.Length > 20000 ? t.ResponseBody[..20000] : t.ResponseBody,
             time = t.Timestamp
         }).Take(200).ToList()
     });
