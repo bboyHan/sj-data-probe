@@ -1,0 +1,45 @@
+{
+  "name": "unipay_sign",
+  "description": "提取腾讯统一支付接口 unipay.qq.com 的 sign 字段值",
+  "priority": 100,
+  "enabled": true,
+
+  "context": {
+    "requires_operation": ["web_save", "unipay", "pay.qq.com"],
+    "min_confidence": 0.8
+  },
+
+  "scan_locations": [
+    "response.body",
+    "request.body"
+  ],
+
+  "matchers": [
+    {"field": "domain", "operator": "contains", "value": "api.unipay.qq.com"},
+    {"field": "path", "operator": "contains", "value": "/web_save"}
+  ],
+
+  "extractors": [
+    {
+      "name": "sign_field",
+      "source": "response_body",
+      "output_field": "value",
+      "data_type": "token",
+      "pattern": "\"sign\"\\s*:\\s*\"([^\"]+)\""
+    },
+    {
+      "name": "sign_field_single_quote",
+      "source": "response_body",
+      "output_field": "value",
+      "data_type": "token",
+      "pattern": "'sign'\\s*:\\s*'([^']+)'"
+    },
+    {
+      "name": "sign_in_request",
+      "source": "request_body",
+      "output_field": "value",
+      "data_type": "token",
+      "pattern": "\"sign\"\\s*:\\s*\"([^\"]+)\""
+    }
+  ]
+}

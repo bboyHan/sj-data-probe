@@ -500,7 +500,27 @@ function addLog(msg) {
 }
 
 // ── Init ──
-setStatus('idle'); addLog('🟢 DataProbe 已就绪');
+async function restoreSession() {
+  try {
+    const session = await api('/api/session');
+    if (session && session.is_running && session.target) {
+      investigationId = session.session_id;
+      startTime = Date.now() - (session.started_at ? (Date.now()-new Date(session.started_at).getTime()) : 0);
+      document.getElementById('sTarget').textContent = session.target.slice(-20);
+      document.getElementById('sProtection').textContent = session.protection || '-';
+      document.getElementById('sChannels').textContent = '-';
+      setStatus('running');
+      document.getElementById('btnStart').style.display = 'none';
+      document.getElementById('btnStop').style.display = '';
+      if (polling) clearInterval(polling);
+      polling = setInterval(pollResults, 3000);
+      pollResults();
+      addLog(`🔄 恢复进行中的调查: ${session.target}`);
+    }
+  } catch(e) { /* 无进行中的调查 */ }
+  if (!polling) setStatus('idle');
+}
+setStatus('idle'); addLog('🟢 DataProbe 已就绪'); restoreSession();
 </script>
 </body>
 </html>
