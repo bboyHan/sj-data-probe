@@ -796,6 +796,51 @@ app.MapGet("/api/passive-tls/keylog", () =>
     return Results.Content(keylog, "text/plain");
 }).WithName("ExportKeyLog").WithDescription("导出 NSS KeyLog 格式（可被 Wireshark 使用）");
 
+// ── 被动 TLS 诊断 ──
+app.MapGet("/api/passive-tls/diag", () =>
+{
+    try
+    {
+        var tempDir = Path.GetTempPath();
+        var etlFiles = Directory.GetFiles(tempDir, "dp_tls_*.etl").Select(f => new
+        {
+            name = Path.GetFileName(f),
+            size = new FileInfo(f).Length,
+            created = File.GetCreationTime(f),
+            xmlSize = File.Exists(Path.ChangeExtension(f, ".xml"))
+                ? new FileInfo(Path.ChangeExtension(f, ".xml")).Length : 0
+        }).ToArray();
+
+        // 检查 logman 跟踪会话
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "logman.exe",
+            Arguments = "query DataProbeTlsTrace -ets",
+            UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true
+        };
+        string logmanOut;
+        using (var proc = System.Diagnostics.Process.Start(psi))
+        {
+            logmanOut = proc?.StandardOutput.ReadToEnd() ?? "null";
+            proc?.WaitForExit(2000);
+        }
+
+        return Results.Ok(new
+        {
+            etw_running = _etwCapture.IsRunning,
+            temp_dir = tempDir,
+            etl_files = etlFiles,
+            logman_status = logmanOut.Trim(),
+            keys_captured = _passiveTls.GetStats().KeyCount
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+}).WithName("PassiveTlsDiag").WithDescription("被动 TLS 诊断信息");
+
 // Export CA certificate
 app.MapGet("/cert", () =>
 {
