@@ -21,6 +21,7 @@ class BrowserConfig:
     disable_images: bool = False
     data_dir: str | None = None  # 使用固定的用户数据目录（保持 Cookie）
     chrome_version: int | None = None  # 指定 Chrome 主版本
+    driver_version: int | None = None  # 指定 chromedriver 版本（不匹配时覆盖）
 
 
 class BrowserLauncher:
@@ -106,10 +107,13 @@ class BrowserLauncher:
             log.info("Proxy: %s:%s", p["host"], p["port"])
 
         # ── 启动浏览器 ──
+        # version_main = Chrome 版本（用于匹配 chromedriver）
+        # driver_version = 手动指定 chromedriver 版本（覆盖 Chrome 匹配）
+        effective_version = self.config.driver_version or chrome_main_ver
         self.driver = uc.Chrome(
             options=options,
             headless=self.config.headless,
-            version_main=chrome_main_ver,
+            version_main=effective_version,
         )
 
         # ── 应用 stealth 补丁 ──

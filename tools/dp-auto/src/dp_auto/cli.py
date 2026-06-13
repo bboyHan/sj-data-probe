@@ -53,6 +53,8 @@ def cmd_launch(args):
         window_size=args.window_size,
         headless=args.headless,
         data_dir=args.user_data_dir,
+        chrome_version=args.chrome_version,
+        driver_version=getattr(args, 'driver_version', None),
     )
 
     if args.proxy_config:
@@ -161,6 +163,8 @@ def main():
     p_launch.add_argument("--user-data-dir", help="Chrome 用户数据目录")
     p_launch.add_argument("--proxy-config", help="代理配置文件路径")
     p_launch.add_argument("--region", help="代理区域（城市）")
+    p_launch.add_argument("--chrome-version", type=int, help="Chrome 主版本号（默认自动检测）")
+    p_launch.add_argument("--driver-version", type=int, help="chromedriver 版本号（默认自动匹配 Chrome）")
 
     # capture 子命令
     p_capture = sub.add_parser("capture", help="捕获支付链接")
