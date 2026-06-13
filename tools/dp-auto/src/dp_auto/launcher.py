@@ -107,14 +107,25 @@ class BrowserLauncher:
             log.info("Proxy: %s:%s", p["host"], p["port"])
 
         # ── 启动浏览器 ──
-        # version_main = Chrome 版本（用于匹配 chromedriver）
-        # driver_version = 手动指定 chromedriver 版本（覆盖 Chrome 匹配）
-        effective_version = self.config.driver_version or chrome_main_ver
-        self.driver = uc.Chrome(
-            options=options,
-            headless=self.config.headless,
-            version_main=effective_version,
-        )
+        # 先尝试用 undetected_chromedriver 自动匹配
+        driver_args = {"options": options, "headless": self.config.headless}
+        if self.config.driver_version:
+            # 用户强制指定 chromedriver 版本（绕过 Chrome 自动检测）
+            driver_args["version_main"] = self.config.driver_version
+        elif chrome_main_ver and chrome_main_ver >= 149:
+            # Chrome 149+ (Canary/Dev) 可能没有对应的 chromedriver
+            # 降级到 148，让 undetected_chromedriver 的补丁机制处理
+            driver_args["version_main"] = chrome_main_ver - 1
+            log.info("Chrome %d is very new, trying chromedriver %d", chrome_main_ver, chrome_main_ver - 1)
+
+        try:
+            self.driver = uc.Chrome(**driver_args)
+        except Exception as e:
+            log.warning("undetected_chromedriver failed: %s", e)
+            log.info("Falling back to standard selenium + webdriver-manager...")
+            self.driver = self._fallback_start(options)
+            if not self.driver:
+                raise
 
         # ── 应用 stealth 补丁 ──
         try:
@@ -125,6 +136,21 @@ class BrowserLauncher:
 
         log.info("Browser started (PID: %s)", self.driver.service.process.pid if hasattr(self.driver.service, 'process') else '?')
         return self.driver
+
+    def _fallback_start(self, options) -> Any | None:
+        """回退方案: 用 webdriver-manager（自动匹配 Chrome 版本）"""
+        try:
+            from selenium import webdriver
+            from selenium.webdriver.chrome.service import Service
+            from webdriver_manager.chrome import ChromeDriverManager
+            log.info("Using webdriver-manager to get correct chromedriver...")
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=options)
+            log.info("Fallback browser started with webdriver-manager")
+            return driver
+        except Exception as e:
+            log.error("Fallback failed: %s", e)
+        return None
 
     def stop(self):
         """关闭浏览器"""
