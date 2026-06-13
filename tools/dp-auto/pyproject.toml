@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "dp-auto"
+version = "0.1.0"
+description = "DataProbe Auto — 浏览器自动化支付捕获引擎"
+requires-python = ">=3.10"
+dependencies = [
+    "undetected-chromedriver>=3.5",
+    "selenium>=4.15",
+    "requests>=2.31",
+    "pillow>=10.0",
+    "pyzbar>=0.1.9",
+]
+
+[project.scripts]
+dp-auto = "dp_auto.cli:main"
