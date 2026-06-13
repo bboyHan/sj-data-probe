@@ -18,3 +18,7 @@ Thumbs.db
 # Build
 packages/
 *.nupkg
+*.pyc
+__pycache__/
+*.egg-info/
+
