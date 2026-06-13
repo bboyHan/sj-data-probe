@@ -763,18 +763,33 @@ app.MapGet("/api/llm/status", () =>
     catch { return Results.Ok(new { ollama = false, template_engine = true }); }
 }).WithName("LlmStatus").WithDescription("检查 AI 规则生成器状态");
 
-// ── 被动 TLS 解密 ──
+// ── 被动 TLS 解密（多路径） ──
 var _passiveTls = new DataProbe.Core.TlsFingerprint.PassiveTlsDecryptor();
+
+// 路径一: ETW Schannel（尽力而为）
 var _etwCapture = new DataProbe.Capture.EtwTlsCaptureService();
 if (_etwCapture.IsAvailable)
 {
     _passiveTls.RegisterKeyProvider(_etwCapture);
     _ = _etwCapture.StartAsync();
-    Console.Error.WriteLine("[PassiveTLS] ETW capture started");
+    Console.Error.WriteLine("[PassiveTLS] ETW provider registered");
 }
 else
 {
     Console.Error.WriteLine("[PassiveTLS] ETW not available (requires admin)");
+}
+
+// 路径二: 进程内存扫描（主要路径）
+var _memScanner = new DataProbe.Capture.MemoryKeyScanner();
+if (_memScanner.IsAvailable)
+{
+    _passiveTls.RegisterKeyProvider(_memScanner);
+    _ = _memScanner.StartAsync();
+    Console.Error.WriteLine("[PassiveTLS] Memory scanner started");
+}
+else
+{
+    Console.Error.WriteLine("[PassiveTLS] Memory scanner not available (requires admin)");
 }
 
 app.MapGet("/api/passive-tls/status", () =>
