@@ -8,9 +8,6 @@ import logging
 import sys
 
 from dp_auto.dp_client import DataProbeClient
-from dp_auto.launcher import BrowserLauncher, BrowserConfig
-from dp_auto.orchestrator import Orchestrator
-from dp_auto.proxy_manager import ProxyManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,35 +21,34 @@ def cmd_check(args):
     """检查 DataProbe 连通性和环境"""
     dp = DataProbeClient()
     if dp.is_healthy():
-        print(f"✅ DataProbe: {dp.base_url} — 已连接")
-        # 检查被动 TLS 状态
+        print(f"[OK] DataProbe: {dp.base_url}")
         tls = dp.passive_tls_status()
-        print(f"   被动 TLS: {tls.get('keys_captured', 0)} keys, "
+        print(f"  Passive TLS: {tls.get('keys_captured', 0)} keys, "
               f"providers: {tls.get('providers', [])}")
     else:
-        print(f"❌ DataProbe: {dp.base_url} — 无法连接")
-        print("   请先启动 DataProbe: dotnet run --project src/DataProbe.Api")
+        print(f"[FAIL] DataProbe: {dp.base_url} (start DataProbe first)")
+        print("  dotnet run --project src/DataProbe.Api")
 
-    # 检查 undetected-chromedriver
     try:
         import undetected_chromedriver as uc
-        print(f"✅ undetected-chromedriver: {uc.__version__}")
+        print(f"[OK] undetected-chromedriver: {uc.__version__}")
     except ImportError:
-        print("❌ undetected-chromedriver: 未安装 (pip install undetected-chromedriver)")
+        print("[FAIL] undetected-chromedriver (pip install undetected-chromedriver)")
 
-    # 检查 Chrome
     import shutil
     chrome = shutil.which("chrome") or shutil.which("chromium")
     if chrome:
-        print(f"✅ Chrome: {chrome}")
+        print(f"[OK] Chrome: {chrome}")
     else:
-        print("⚠️ Chrome: 未找到，请确保 Chrome 已安装")
+        print("[FAIL] Chrome not found")
 
     return 0
 
 
 def cmd_launch(args):
     """启动隐身浏览器并打开目标页面"""
+    from dp_auto.launcher import BrowserLauncher, BrowserConfig
+    from dp_auto.proxy_manager import ProxyManager
     config = BrowserConfig(
         window_size=args.window_size,
         headless=args.headless,
@@ -89,6 +85,9 @@ def cmd_launch(args):
 
 def cmd_capture(args):
     """自动捕获支付链接"""
+    from dp_auto.launcher import BrowserLauncher, BrowserConfig
+    from dp_auto.orchestrator import Orchestrator
+
     dp = DataProbeClient()
     if not dp.is_healthy():
         log.error("DataProbe not running. Start it first.")
@@ -118,7 +117,7 @@ def cmd_capture(args):
             )
 
             if result.success:
-                print(f"\n✅ 支付链接: {result.dom_data}")
+                print(f"\n[OK] 支付链接: {result.dom_data}")
                 print(f"   截图: {len(result.screenshot) if result.screenshot else 0} bytes")
                 print(f"   DP 证据: {len(result.dp_evidence)} 条")
 
@@ -126,7 +125,7 @@ def cmd_capture(args):
                 if result.dom_data:
                     dp.inject_evidence(result.dom_data, "url", "dp-auto")
             else:
-                print("\n❌ 支付捕获失败")
+                print("\n[FAIL] 支付捕获失败")
         else:
             log.info("手动模式: 浏览器已打开，请手动操作")
 
