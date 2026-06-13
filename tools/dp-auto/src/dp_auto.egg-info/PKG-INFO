@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: dp-auto
+Version: 0.1.0
+Summary: DataProbe Auto — 浏览器自动化支付捕获引擎
+Requires-Python: >=3.10
+Requires-Dist: undetected-chromedriver>=3.5
+Requires-Dist: selenium>=4.15
+Requires-Dist: requests>=2.31
+Requires-Dist: pillow>=10.0
+Requires-Dist: pyzbar>=0.1.9

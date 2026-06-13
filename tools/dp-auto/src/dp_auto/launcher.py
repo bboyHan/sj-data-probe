@@ -30,11 +30,48 @@ class BrowserLauncher:
         self.config = config or BrowserConfig()
         self.driver = None
 
+    @staticmethod
+    def _detect_chrome_version() -> int | None:
+        """通过 PowerShell 检测 Chrome 主版本号"""
+        import subprocess, re
+        try:
+            script = "(Get-Item 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe').VersionInfo.FileVersion"
+            result = subprocess.run(
+                ["powershell", "-Command", script],
+                capture_output=True, text=True, timeout=5
+            )
+            ver = result.stdout.strip()
+            m = re.search(r"(\d+)\.", ver)
+            if m:
+                main_ver = int(m.group(1))
+                log.info("Detected Chrome version: %s (main: %d)", ver, main_ver)
+                return main_ver
+        except Exception as e:
+            log.warning("Chrome detection failed: %s", e)
+        return None
+
     def start(self) -> Any:
         """启动隐身 Chrome 实例"""
         import undetected_chromedriver as uc
 
+        # 自动检测 Chrome 版本
+        chrome_main_ver = self.config.chrome_version or self._detect_chrome_version()
+        if chrome_main_ver:
+            log.info("Using Chrome main version: %d", chrome_main_ver)
+
         options = uc.ChromeOptions()
+        # 指定 Chrome 二进制路径
+        chrome_paths = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            r"C:\Users\1\AppData\Local\Google\Chrome\Application\chrome.exe",
+        ]
+        for p in chrome_paths:
+            import os
+            if os.path.exists(p):
+                options.binary_location = p
+                log.info("Chrome binary: %s", p)
+                break
 
         # ── 基础隐身选项 ──
         options.add_argument("--disable-blink-features=AutomationControlled")
@@ -69,14 +106,10 @@ class BrowserLauncher:
             log.info("Proxy: %s:%s", p["host"], p["port"])
 
         # ── 启动浏览器 ──
-        version_args = {}
-        if self.config.chrome_version:
-            version_args["version_main"] = self.config.chrome_version
-
         self.driver = uc.Chrome(
             options=options,
             headless=self.config.headless,
-            **version_args,
+            version_main=chrome_main_ver,
         )
 
         # ── 应用 stealth 补丁 ──
